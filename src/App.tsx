@@ -13,7 +13,7 @@ import 'esri-leaflet';
 // @ts-ignore
 import 'leaflet-providers';
 // @ts-ignore
-import * as shp from 'shpjs';
+import shp from 'shpjs';
 import './App.css';
 
 // @ts-ignore
