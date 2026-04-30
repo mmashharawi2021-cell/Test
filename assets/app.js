@@ -3,6 +3,7 @@ window.App = (() => {
 
   function setHtml(html) {
     document.getElementById('app').innerHTML = html;
+    requestAnimationFrame(() => window.ThemeManager?.applyTheme(window.ThemeManager.current()));
   }
 
   function render() {
@@ -22,6 +23,7 @@ window.App = (() => {
         setHtml(window.AppUI.login(true));
         return;
       }
+      window.ThemeManager?.loadUserTheme(user);
       window.FirebaseService.seedSettings().catch(console.warn);
       if (state.unsubscribe) state.unsubscribe();
       state.unsubscribe = window.FirebaseService.listenReports(reports => {
