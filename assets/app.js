@@ -34,14 +34,14 @@ window.App = (() => {
 
   async function login(event) {
     event.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPassword').value;
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
     try {
       setHtml(window.AppUI.skeleton());
-      await window.FirebaseService.signIn(email, password);
+      await window.FirebaseService.signIn(username, password);
     } catch (error) {
       setHtml(window.AppUI.login(true));
-      alert('فشل تسجيل الدخول. تحقق من البريد وكلمة المرور ومن تفعيل Firebase Authentication.');
+      alert('بيانات الدخول غير صحيحة أو لم يتم تفعيل Anonymous Authentication في Firebase.');
     }
   }
 
