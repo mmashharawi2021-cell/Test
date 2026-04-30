@@ -14,7 +14,6 @@ window.ReportParser = (() => {
   };
 
   function inputDate(text) {
-    const raw = first(text, [/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/]);
     const match = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (!match) return new Date().toISOString().slice(0, 10);
     return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
@@ -51,6 +50,14 @@ window.ReportParser = (() => {
     return String(line || '').replace(/^[\s▪▫◾◼︎\-*\.]+/g, '').replace(/\s+/g, ' ').trim();
   }
 
+  function extractQuantity(line) {
+    return number(first(line, [/(?:الكمية\s*\/?|كمية\s*\/?)\s*([0-9.,]+)/i]));
+  }
+
+  function extractCars(line) {
+    return number(first(line, [/(?:عدد\s+السيارات|السيارات)\s*\/?\s*[:：]?\s*([0-9.,]+)/i]));
+  }
+
   function beneficiaries(text) {
     const start = text.search(/الإنتاج اليومي|الانتاج اليومي|جهات|التعبئة/i);
     const section = start >= 0 ? text.slice(start) : text;
@@ -61,21 +68,18 @@ window.ReportParser = (() => {
     for (const line of lines) {
       if (/إجمالي|اجمالي|تقرير|ساعة|ساعات|وقود|فحوصات|كميات/.test(line)) continue;
 
-      const oneLine = line.match(/(.+?)\s+(?:الكمية\s*\/?|كمية\s*\/?)\s*([0-9.,]+).*?عدد\s+السيارات\s*\/?\s*([0-9]+)/);
-      if (oneLine) {
-        items.push({ name: cleanName(oneLine[1]), quantity: number(oneLine[2]), cars: number(oneLine[3]) });
-        name = '';
+      const hasQty = /(?:الكمية\s*\/?|كمية\s*\/?)\s*[0-9.,]+/i.test(line);
+      if (hasQty) {
+        const inlineName = cleanName(line.replace(/(?:الكمية\s*\/?|كمية\s*\/?).*$/i, ''));
+        const finalName = name || inlineName;
+        if (finalName) {
+          items.push({ name: finalName, quantity: extractQuantity(line), cars: extractCars(line) });
+          name = '';
+        }
         continue;
       }
 
-      const qtyLine = line.match(/(?:الكمية\s*\/?|كمية\s*\/?)\s*([0-9.,]+).*?(?:عدد\s+السيارات\s*\/?\s*([0-9]+))?/);
-      if (qtyLine && name) {
-        items.push({ name, quantity: number(qtyLine[1]), cars: number(qtyLine[2] || 0) });
-        name = '';
-        continue;
-      }
-
-      const external = line.match(/(?:مياه خارجية|صنابير|خارج المحطة).*?([0-9.,]+)\s*كوب/);
+      const external = line.match(/(?:مياه خارجية|صنابير|خارج المحطة).*?([0-9.,]+)\s*كوب/i);
       if (external) {
         items.push({ name: 'مياه خارجية / صنابير للمواطنين خارج المحطة', quantity: number(external[1]), cars: 0 });
         name = '';
