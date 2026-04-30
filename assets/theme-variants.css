@@ -28,7 +28,42 @@ body.theme-sand .btn.primary,body.theme-sand .tab.active{background:linear-gradi
 body.theme-sand .eyebrow,body.theme-sand .report-card span,body.theme-sand .section-head .eyebrow{color:#F5E8C7!important}
 body.theme-sand .notice.warn,body.theme-sand .card-badge.warn{background:rgba(214,180,106,.14)!important;border-color:rgba(214,180,106,.42)!important;color:#F5E8C7!important}
 
-body.theme-iceblue{--color-navy-deep:#0B2D4D;--color-blue-petrol:#1769AA;--color-sky:#7DD3FC;--color-tech-petrol:#0EA5E9;--color-teal:#BAE6FD;--color-dark-green:#06111F;--color-accent-warm:#F8FBFF;background:radial-gradient(circle at 14% 8%, rgba(186,230,253,.24), transparent 28%),radial-gradient(circle at 88% 18%, rgba(125,211,252,.18), transparent 30%),linear-gradient(135deg,#06111F 0%,#0B2D4D 45%,#F8FBFF 170%) !important}
-body.theme-iceblue .btn.primary,body.theme-iceblue .tab.active{background:linear-gradient(135deg,#0EA5E9,#BAE6FD)!important;color:#062338!important;border-color:rgba(186,230,253,.58)!important;box-shadow:0 16px 44px rgba(14,165,233,.26), inset 0 1px 0 rgba(255,255,255,.24)!important}
-body.theme-iceblue .eyebrow,body.theme-iceblue .report-card span,body.theme-iceblue .section-head .eyebrow{color:#DFF7FF!important}
-body.theme-iceblue .hero,body.theme-iceblue .archive,body.theme-iceblue .details,body.theme-iceblue .cards-section,body.theme-iceblue .stats article{border-color:rgba(186,230,253,.22)!important}
+body.theme-iceblue{
+  --color-navy-deep:#0A3A68;
+  --color-blue-petrol:#0EA5E9;
+  --color-sky:#7DD3FC;
+  --color-tech-petrol:#38BDF8;
+  --color-teal:#E0F7FF;
+  --color-dark-green:#051526;
+  --color-accent-warm:#FFFFFF;
+  background:
+    radial-gradient(circle at 13% 7%, rgba(255,255,255,.42), transparent 22%),
+    radial-gradient(circle at 80% 8%, rgba(186,230,253,.48), transparent 28%),
+    radial-gradient(circle at 70% 72%, rgba(56,189,248,.28), transparent 36%),
+    linear-gradient(135deg,#051526 0%,#0A3A68 30%,#0EA5E9 58%,#E0F7FF 84%,#FFFFFF 115%) !important;
+}
+body.theme-iceblue:after{background:radial-gradient(circle at center,transparent 0%,rgba(2,12,27,.12) 82%)!important}
+body.theme-iceblue:before{opacity:.38!important;background:linear-gradient(rgba(255,255,255,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.11) 1px,transparent 1px)!important;background-size:46px 46px!important}
+body.theme-iceblue .hero,body.theme-iceblue .archive,body.theme-iceblue .details,body.theme-iceblue .cards-section,body.theme-iceblue .stats article,body.theme-iceblue .login-card,body.theme-iceblue .login-visual,body.theme-iceblue .modal-panel,body.theme-iceblue .confirm-card{
+  background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.075))!important;
+  border-color:rgba(255,255,255,.32)!important;
+  box-shadow:0 24px 80px rgba(3,29,54,.28),inset 0 1px 0 rgba(255,255,255,.34)!important;
+  backdrop-filter:blur(26px) saturate(150%)!important;
+}
+body.theme-iceblue .report-card,body.theme-iceblue .detail-grid article,body.theme-iceblue .beneficiary-summary,body.theme-iceblue .tests-summary,body.theme-iceblue .beneficiary-cards article,body.theme-iceblue .test-cards article,body.theme-iceblue .official-report summary,body.theme-iceblue .report-actions-panel,body.theme-iceblue .theme-dock{
+  background:linear-gradient(135deg,rgba(255,255,255,.18),rgba(255,255,255,.065))!important;
+  border-color:rgba(255,255,255,.26)!important;
+  box-shadow:0 14px 42px rgba(3,29,54,.18),inset 0 1px 0 rgba(255,255,255,.25)!important;
+  backdrop-filter:blur(22px) saturate(145%)!important;
+}
+body.theme-iceblue .btn.primary,body.theme-iceblue .tab.active{
+  background:linear-gradient(135deg,#FFFFFF,#BAE6FD 34%,#38BDF8 72%,#0EA5E9)!important;
+  color:#05243F!important;
+  border-color:rgba(255,255,255,.72)!important;
+  box-shadow:0 18px 56px rgba(14,165,233,.34),inset 0 1px 0 rgba(255,255,255,.60)!important;
+}
+body.theme-iceblue .btn,body.theme-iceblue .tab{border-color:rgba(255,255,255,.24)!important}
+body.theme-iceblue .eyebrow,body.theme-iceblue .report-card span,body.theme-iceblue .section-head .eyebrow{color:#F8FCFF!important}
+body.theme-iceblue .report-card.active,body.theme-iceblue .report-card:hover{background:linear-gradient(135deg,rgba(255,255,255,.28),rgba(125,211,252,.16))!important;border-color:rgba(255,255,255,.48)!important}
+body.theme-iceblue .notice.warn,body.theme-iceblue .card-badge.warn{background:rgba(255,255,255,.18)!important;border-color:rgba(255,255,255,.34)!important;color:#FFFFFF!important}
+body.theme-iceblue .card-badge.ok{background:rgba(255,255,255,.18)!important;border-color:rgba(255,255,255,.34)!important;color:#ECFEFF!important}
