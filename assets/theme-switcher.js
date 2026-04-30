@@ -1,6 +1,6 @@
 (() => {
   const STORAGE_KEY = 'waterAppTheme';
-  const allowed = ['default', 'graphite', 'emerald', 'sand', 'ocean', 'iceblue'];
+  const allowed = ['default', 'graphite', 'emerald', 'sand', 'ocean', 'copper'];
 
   function cleanThemeClasses() {
     document.body.classList.remove(
