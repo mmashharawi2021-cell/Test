@@ -23,9 +23,12 @@ window.FirebaseService = (() => {
     return db.collection(name);
   }
 
-  async function signIn(email, password) {
+  async function signIn(username, password) {
     init();
-    return auth.signInWithEmailAndPassword(email, password);
+    const validUser = username === window.WATER_APP_SETTINGS.defaultUserName;
+    const validPass = password === window.WATER_APP_SETTINGS.defaultUserName;
+    if (!validUser || !validPass) throw new Error('بيانات الدخول غير صحيحة.');
+    return auth.signInAnonymously();
   }
 
   async function signOut() {
@@ -51,7 +54,7 @@ window.FirebaseService = (() => {
     const payload = {
       ...report,
       updatedAt: now(),
-      updatedBy: user?.displayName || user?.email || window.WATER_APP_SETTINGS.defaultUserName
+      updatedBy: window.WATER_APP_SETTINGS.defaultUserName
     };
     let ref;
     if (existingId) {
@@ -62,7 +65,7 @@ window.FirebaseService = (() => {
       ref = await collection('reports').add({
         ...payload,
         createdAt: now(),
-        createdBy: user?.displayName || user?.email || window.WATER_APP_SETTINGS.defaultUserName
+        createdBy: window.WATER_APP_SETTINGS.defaultUserName
       });
       await logActivity('create', user, ref.id, { title: report.title });
     }
@@ -79,8 +82,9 @@ window.FirebaseService = (() => {
     init();
     return collection('activityLogs').add({
       actionType,
-      userName: user?.displayName || user?.email || window.WATER_APP_SETTINGS.defaultUserName,
+      userName: window.WATER_APP_SETTINGS.defaultUserName,
       userRole: window.WATER_APP_SETTINGS.defaultRole,
+      authUid: user?.uid || null,
       reportId,
       changedFields: changedFields || {},
       timestamp: now()
