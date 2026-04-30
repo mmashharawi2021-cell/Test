@@ -2,8 +2,20 @@ window.AppUI = (() => {
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const d = v => window.ReportUtils.displayDate(v);
 
+  function themeDots() {
+    const dots = [
+      ['default', 'الأزرق الحالي'],
+      ['graphite', 'رمادي زجاجي'],
+      ['emerald', 'أخضر رسمي'],
+      ['sand', 'رملي ذهبي'],
+      ['ocean', 'أزرق بحري'],
+      ['copper', 'نحاسي']
+    ];
+    return `<div class="theme-dock" title="تغيير لون الموقع">${dots.map(([key, label]) => `<button type="button" class="theme-dot theme-dot-${key}" data-theme-dot="${key}" aria-label="${label}" onclick="ThemeManager.saveUserTheme('${key}')"></button>`).join('')}</div>`;
+  }
+
   function login(configured) {
-    return `<main class="login-screen premium-login"><section class="login-visual"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="well-mark">💧</div><p class="eyebrow">منصة تشغيل رسمية</p><h1>نظام تقارير تشغيل وضخ المياه</h1></section><section class="login-card"><p class="eyebrow">تسجيل الدخول</p><h2>مرحبًا بك</h2><p class="muted">أدخل بيانات الدخول المعتمدة للمتابعة.</p>${!configured ? `<div class="notice warn"><p>Firebase غير مفعّل بعد. عدّل ملف assets/firebase-config.js ببيانات مشروعك.</p></div>` : ''}<form onsubmit="App.login(event)" class="login-form"><label>اسم المستخدم</label><input id="loginUsername" type="text" required autocomplete="username" placeholder="أدخل اسم المستخدم"><label>كلمة المرور</label><input id="loginPassword" type="password" required autocomplete="current-password" placeholder="أدخل كلمة المرور"><button class="btn primary big" type="submit">دخول للنظام</button></form></section></main>`;
+    return `<main class="login-screen premium-login">${themeDots()}<section class="login-visual"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="well-mark">💧</div><p class="eyebrow">منصة تشغيل رسمية</p><h1>نظام تقارير تشغيل وضخ المياه</h1></section><section class="login-card"><p class="eyebrow">تسجيل الدخول</p><h2>مرحبًا بك</h2><p class="muted">أدخل بيانات الدخول المعتمدة للمتابعة.</p>${!configured ? `<div class="notice warn"><p>Firebase غير مفعّل بعد. عدّل ملف assets/firebase-config.js ببيانات مشروعك.</p></div>` : ''}<form onsubmit="App.login(event)" class="login-form"><label>اسم المستخدم</label><input id="loginUsername" type="text" required autocomplete="username" placeholder="أدخل اسم المستخدم"><label>كلمة المرور</label><input id="loginPassword" type="password" required autocomplete="current-password" placeholder="أدخل كلمة المرور"><button class="btn primary big" type="submit">دخول للنظام</button></form></section></main>`;
   }
 
   function skeleton() {
@@ -55,7 +67,7 @@ window.AppUI = (() => {
     const reports = state.reports || [];
     const active = reports.find(r => r.id === state.currentId) || reports[0];
     const s = window.ReportUtils.summary(reports);
-    return `<main class="app-shell"><header class="hero"><div><p class="eyebrow">لوحة التشغيل</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p>منصة يومية رسمية للتشغيل، الوقود، الإنتاج، الفحوصات، الجهات المستفيدة، والأرشفة.</p></div><div class="hero-actions"><button class="btn primary big" onclick="App.openNew()">إضافة تقرير جديد</button><button class="btn" onclick="App.openSummary()">تقارير تجميعية</button><button class="btn" onclick="App.exportAllExcel()">Excel شامل</button><button class="btn ghost" onclick="App.logout()">خروج</button></div></header><section class="stats"><article><span>التقارير</span><strong>${reports.length}</strong></article><article><span>ساعات التشغيل</span><strong>${s.runHours.toFixed(1)}</strong></article><article><span>وقود مستهلك</span><strong>${s.fuelConsumed}</strong></article><article><span>مياه معبأة</span><strong>${s.filledWater}</strong></article></section><section class="workspace"><aside class="archive"><div class="section-head"><div><p class="eyebrow">الأرشيف</p><h2>كروت التقارير</h2></div></div><div class="cards">${reports.map(r => card(r, active?.id)).join('') || '<div class="empty-mini">لا توجد تقارير محفوظة.</div>'}</div></aside>${details(active)}</section>${modal()}</main>`;
+    return `<main class="app-shell">${themeDots()}<header class="hero"><div><p class="eyebrow">لوحة التشغيل</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p>منصة يومية رسمية للتشغيل، الوقود، الإنتاج، الفحوصات، الجهات المستفيدة، والأرشفة.</p></div><div class="hero-actions"><button class="btn primary big" onclick="App.openNew()">إضافة تقرير جديد</button><button class="btn" onclick="App.openSummary()">تقارير تجميعية</button><button class="btn" onclick="App.exportAllExcel()">Excel شامل</button><button class="btn ghost" onclick="App.logout()">خروج</button></div></header><section class="stats"><article><span>التقارير</span><strong>${reports.length}</strong></article><article><span>ساعات التشغيل</span><strong>${s.runHours.toFixed(1)}</strong></article><article><span>وقود مستهلك</span><strong>${s.fuelConsumed}</strong></article><article><span>مياه معبأة</span><strong>${s.filledWater}</strong></article></section><section class="workspace"><aside class="archive"><div class="section-head"><div><p class="eyebrow">الأرشيف</p><h2>كروت التقارير</h2></div></div><div class="cards">${reports.map(r => card(r, active?.id)).join('') || '<div class="empty-mini">لا توجد تقارير محفوظة.</div>'}</div></aside>${details(active)}</section>${modal()}</main>`;
   }
 
   return { login, skeleton, layout, reportForm, esc };
