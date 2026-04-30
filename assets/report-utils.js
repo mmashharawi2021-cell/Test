@@ -10,7 +10,7 @@ window.ReportUtils = (() => {
       generalNotes: '',
       generator: { periods: [{ startTime: '', stopTime: '', runHours: '' }], totalRunHours: '', status: 'يعمل', operatorName: '', notes: '', extraFields: [] },
       fuel: { addedDaily: '', consumedDaily: '', municipalSupplied: '', previousBalance: '', currentBalance: '', loss: '', notes: '', extraFields: [] },
-      water: { dailyProduction: '', rejectWater: '', lossPercentage: '', filledWater: '', carsCount: '', averagePerCar: '', notes: '' },
+      water: { dailyProduction: '', rejectWater: '', lossPercentage: '', filledWater: '', carsCount: '', averagePerCar: '', notes: '', filteredRate: '', submersibleRate: '' },
       tests: { phAfterDesalination: '', phWellWater: '', tdsDesalinated: '', tdsWell: '', tdsReject: '', freeChlorine: '', extraFields: [] },
       beneficiaries: [],
       notes: '',
@@ -68,6 +68,15 @@ window.ReportUtils = (() => {
     r.water.filledWater = r.beneficiaries.reduce((sum, item) => sum + number(item.quantity), 0);
     r.water.carsCount = r.beneficiaries.reduce((sum, item) => sum + number(item.cars), 0);
     r.water.averagePerCar = number(r.water.carsCount) ? +(number(r.water.filledWater) / number(r.water.carsCount)).toFixed(2) : '';
+
+    const runHoursDecimal = hoursToDecimal(r.generator.totalRunHours);
+    if (!number(r.water.dailyProduction) && number(r.water.filteredRate) && runHoursDecimal) {
+      r.water.dailyProduction = +(number(r.water.filteredRate) * runHoursDecimal).toFixed(2);
+    }
+    if (!number(r.water.rejectWater) && number(r.water.submersibleRate) && number(r.water.filteredRate) && runHoursDecimal) {
+      r.water.rejectWater = +((number(r.water.submersibleRate) - number(r.water.filteredRate)) * runHoursDecimal).toFixed(2);
+    }
+
     if (number(r.water.dailyProduction) && number(r.water.rejectWater)) {
       r.water.lossPercentage = +((number(r.water.rejectWater) / number(r.water.dailyProduction)) * 100).toFixed(2);
     }
@@ -90,7 +99,7 @@ window.ReportUtils = (() => {
       generalNotes: parsed.generalNotes || '',
       generator: { ...base.generator, periods: [firstPeriod], totalRunHours: parsed.runHours || '', status: parsed.generatorStatus || 'يعمل', operatorName: parsed.operatorName || '', notes: parsed.generatorNotes || '' },
       fuel: { ...base.fuel, addedDaily: parsed.fuelAdded || '', consumedDaily: parsed.fuelConsumed || '', municipalSupplied: parsed.fuelMunicipal || '', previousBalance: parsed.previousFuelBalance || '', currentBalance: parsed.fuelBalance || '', loss: parsed.fuelLoss || '', notes: parsed.fuelNotes || '' },
-      water: { ...base.water, dailyProduction: parsed.dailyProduction || parsed.submersibleRate || '', rejectWater: parsed.rejectWater || parsed.wasteQuantity || '', filledWater: parsed.totalQuantity || '', carsCount: parsed.totalCars || '', averagePerCar: '', notes: parsed.waterNotes || '' },
+      water: { ...base.water, dailyProduction: parsed.dailyProduction || '', rejectWater: parsed.rejectWater || '', filledWater: parsed.totalQuantity || '', carsCount: parsed.totalCars || '', averagePerCar: '', notes: parsed.waterNotes || '', filteredRate: parsed.filteredRate || '', submersibleRate: parsed.submersibleRate || '' },
       tests: { ...base.tests, phAfterDesalination: parsed.phFiltered || '', phWellWater: parsed.phWell || '', tdsDesalinated: parsed.tdsFiltered || '', tdsWell: parsed.tdsWell || '', tdsReject: parsed.tdsWaste || '', freeChlorine: parsed.chlorine || '' },
       beneficiaries: (parsed.beneficiaries || []).map((item, index) => ({ id: item.id || `b-${Date.now()}-${index}`, name: item.name, quantity: item.quantity, cars: item.cars, notes: item.notes || '' })),
       sourceText: parsed.sourceText || '',
@@ -102,7 +111,7 @@ window.ReportUtils = (() => {
   function whatsappText(report) {
     const r = recalc(report);
     const beneficiaries = (r.beneficiaries || []).map(item => `▪️ ${item.name}\nالكمية/ ${item.quantity || 0} كوب ، عدد السيارات/ ${item.cars || 0}`).join('\n\n');
-    return `*${r.title}*\n\n📅 التاريخ: ${displayDate(r.reportDate)}\n📍 المحطة: ${r.stationName || '-'}\n\n⏱️ تشغيل المولد:\n▪️ البداية: ${r.generator.periods?.[0]?.startTime || '-'}\n▪️ الإيقاف: ${r.generator.periods?.[0]?.stopTime || '-'}\n▪️ ساعات التشغيل: ${r.generator.totalRunHours || '-'}\n▪️ الحالة: ${r.generator.status || '-'}\n\n⛽ الوقود:\n▪️ المضاف يومياً: ${r.fuel.addedDaily || '_'} لتر\n▪️ المستهلك يومياً: ${r.fuel.consumedDaily || '_'} لتر\n▪️ المورد من البلدية: ${r.fuel.municipalSupplied || '_'} لتر\n▪️ الرصيد السابق: ${r.fuel.previousBalance || '_'} لتر\n▪️ الرصيد الحالي: ${r.fuel.currentBalance || '_'} لتر\n▪️ الفرق/الفاقد: ${r.fuel.loss || '_'} لتر\n\n💧 كميات المياه:\n▪️ الإنتاج اليومي: ${r.water.dailyProduction || '_'} كوب\n▪️ العادم: ${r.water.rejectWater || '_'} كوب\n▪️ نسبة الفاقد: ${r.water.lossPercentage || '_'}%\n▪️ المعبأ للجهات: ${r.water.filledWater || 0} كوب\n▪️ عدد السيارات: ${r.water.carsCount || 0}\n▪️ متوسط السيارة: ${r.water.averagePerCar || '_'} كوب\n\n🧪 فحوصات المياه:\n▪️ PH بعد التحلية: ${r.tests.phAfterDesalination || '_'}\n▪️ PH مياه الغاطس: ${r.tests.phWellWater || '_'}\n▪️ TDS مياه محلاة: ${r.tests.tdsDesalinated || '_'}\n▪️ TDS بئر: ${r.tests.tdsWell || '_'}\n▪️ TDS عادم: ${r.tests.tdsReject || '_'}\n▪️ الكلور الحر: ${r.tests.freeChlorine || '_'}\n\n🚚 الجهات المستفيدة:\n${beneficiaries || 'لا توجد جهات مدخلة'}\n\n📝 ملاحظات:\n${r.notes || r.generalNotes || '_'}`;
+    return `*${r.title}*\n\n📅 التاريخ: ${displayDate(r.reportDate)}\n📍 المحطة: ${r.stationName || '-'}\n\n⏱️ تشغيل المولد:\n▪️ البداية: ${r.generator.periods?.[0]?.startTime || '-'}\n▪️ الإيقاف: ${r.generator.periods?.[0]?.stopTime || '-'}\n▪️ ساعات التشغيل: ${r.generator.totalRunHours || '-'}\n▪️ الحالة: ${r.generator.status || '-'}\n\n⛽ الوقود:\n▪️ المضاف يومياً: ${r.fuel.addedDaily || '_'} لتر\n▪️ المستهلك يومياً: ${r.fuel.consumedDaily || '_'} لتر\n▪️ المورد من البلدية: ${r.fuel.municipalSupplied || '_'} لتر\n▪️ الرصيد السابق: ${r.fuel.previousBalance || '_'} لتر\n▪️ الرصيد الحالي: ${r.fuel.currentBalance || '_'} لتر\n▪️ الفرق/الفاقد: ${r.fuel.loss || '_'} لتر\n\n💧 كميات المياه:\n▪️ إنتاج الغاطس: ${r.water.submersibleRate || '_'} كوب/ساعة\n▪️ بعد الفلترة: ${r.water.filteredRate || '_'} كوب/ساعة\n▪️ الإنتاج اليومي: ${r.water.dailyProduction || '_'} كوب\n▪️ العادم: ${r.water.rejectWater || '_'} كوب\n▪️ نسبة الفاقد: ${r.water.lossPercentage || '_'}%\n▪️ المعبأ للجهات: ${r.water.filledWater || 0} كوب\n▪️ عدد السيارات: ${r.water.carsCount || 0}\n▪️ متوسط السيارة: ${r.water.averagePerCar || '_'} كوب\n\n🧪 فحوصات المياه:\n▪️ PH بعد التحلية: ${r.tests.phAfterDesalination || '_'}\n▪️ PH مياه الغاطس: ${r.tests.phWellWater || '_'}\n▪️ TDS مياه محلاة: ${r.tests.tdsDesalinated || '_'}\n▪️ TDS بئر: ${r.tests.tdsWell || '_'}\n▪️ TDS عادم: ${r.tests.tdsReject || '_'}\n▪️ الكلور الحر: ${r.tests.freeChlorine || '_'}\n\n🚚 الجهات المستفيدة:\n${beneficiaries || 'لا توجد جهات مدخلة'}\n\n📝 ملاحظات:\n${r.notes || r.generalNotes || '_'}`;
   }
 
   function summary(reports) {
