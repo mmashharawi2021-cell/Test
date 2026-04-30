@@ -1,0 +1,164 @@
+:root{
+  --color-navy-deep:#031D36;
+  --color-blue-petrol:#135381;
+  --color-sky:#3995D4;
+  --color-tech-petrol:#125069;
+  --color-teal:#1F879A;
+  --color-dark-green:#151F20;
+  --color-ice:#EEEEF0;
+  --color-accent-warm:#EA905E;
+  --glass-panel:rgba(238,238,240,.075);
+  --glass-border:rgba(238,238,240,.16);
+  --soft-shadow:0 28px 90px rgba(0,0,0,.30);
+}
+
+body{
+  color:var(--color-ice);
+  background:
+    radial-gradient(circle at 16% 7%, rgba(57,149,212,.20), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(31,135,154,.17), transparent 30%),
+    radial-gradient(circle at 45% 95%, rgba(19,83,129,.18), transparent 34%),
+    linear-gradient(135deg, #02070f 0%, var(--color-navy-deep) 45%, var(--color-dark-green) 100%);
+}
+
+body:before{
+  background:
+    linear-gradient(rgba(238,238,240,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(238,238,240,.022) 1px, transparent 1px);
+  background-size:46px 46px;
+  opacity:.9;
+}
+
+body:after{
+  content:'';
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:radial-gradient(circle at center, transparent 0%, rgba(0,0,0,.30) 78%);
+  z-index:-1;
+}
+
+.hero,.archive,.details,.login-card,.login-visual,.modal-panel,.stats article{
+  background:linear-gradient(135deg, rgba(238,238,240,.09), rgba(238,238,240,.035));
+  border-color:var(--glass-border);
+  box-shadow:var(--soft-shadow), inset 0 1px 0 rgba(255,255,255,.10);
+}
+
+.hero:after,.orb-a,.orb-b{
+  filter:blur(2px);
+}
+
+.hero:before,.login-visual:before,.details:before{
+  content:'';
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  border-radius:inherit;
+  background:linear-gradient(120deg, transparent 0%, rgba(255,255,255,.10) 42%, transparent 58%);
+  transform:translateX(120%);
+  animation:lightSweep 7s ease-in-out infinite;
+  opacity:.45;
+}
+
+@keyframes lightSweep{
+  0%,55%{transform:translateX(120%)}
+  75%{transform:translateX(-120%)}
+  100%{transform:translateX(-120%)}
+}
+
+.btn.primary,.tab.active{
+  background:linear-gradient(135deg, var(--color-sky), var(--color-teal));
+  border-color:rgba(57,149,212,.60);
+  box-shadow:0 16px 42px rgba(31,135,154,.25), inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+.btn.primary:hover,.tab.active:hover{
+  box-shadow:0 20px 54px rgba(57,149,212,.32), inset 0 1px 0 rgba(255,255,255,.20);
+}
+
+.btn,.tab,.report-card,.form-grid input,.form-grid textarea,.login-form input,.smart-input{
+  background:rgba(2,7,15,.42);
+  border-color:rgba(238,238,240,.14);
+}
+
+.report-card.active,.report-card:hover{
+  background:linear-gradient(135deg, rgba(57,149,212,.18), rgba(31,135,154,.10));
+  border-color:rgba(57,149,212,.58);
+}
+
+.eyebrow,.report-card span,.section-head .eyebrow{
+  color:#8DD7FF;
+}
+
+.login-screen.premium-login{
+  position:relative;
+}
+
+.login-screen.premium-login:before{
+  content:'';
+  position:absolute;
+  width:min(520px,70vw);
+  height:min(520px,70vw);
+  border-radius:50%;
+  right:8%;
+  top:8%;
+  background:radial-gradient(circle, rgba(57,149,212,.18), transparent 67%);
+  pointer-events:none;
+}
+
+.login-screen.premium-login:after{
+  content:'';
+  position:absolute;
+  width:min(420px,60vw);
+  height:min(420px,60vw);
+  border-radius:50%;
+  left:8%;
+  bottom:5%;
+  background:radial-gradient(circle, rgba(31,135,154,.16), transparent 68%);
+  pointer-events:none;
+}
+
+.login-visual,.login-card{
+  z-index:1;
+}
+
+.login-visual{
+  min-height:600px;
+  background:
+    linear-gradient(160deg, rgba(3,29,54,.86), rgba(18,80,105,.36)),
+    radial-gradient(circle at 25% 20%, rgba(57,149,212,.28), transparent 34%);
+}
+
+.login-visual h1{
+  max-width:760px;
+  letter-spacing:-.5px;
+}
+
+.login-card{
+  background:linear-gradient(155deg, rgba(238,238,240,.10), rgba(19,83,129,.10));
+}
+
+.well-mark{
+  background:linear-gradient(135deg, rgba(57,149,212,.22), rgba(31,135,154,.14));
+  box-shadow:0 0 60px rgba(57,149,212,.22);
+}
+
+.report-preview{
+  background:rgba(2,7,15,.50);
+  border-color:rgba(238,238,240,.12);
+}
+
+.notice.warn{
+  background:rgba(234,144,94,.14);
+  border-color:rgba(234,144,94,.42);
+  color:#FFD8B8;
+}
+
+.skeleton-card,.stats article:empty,.sk{
+  background:linear-gradient(90deg, rgba(238,238,240,.035), rgba(57,149,212,.16), rgba(238,238,240,.035));
+  background-size:230% 100%;
+}
+
+@media(max-width:980px){
+  .login-visual{min-height:390px}
+}
