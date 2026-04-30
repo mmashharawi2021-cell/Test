@@ -1,107 +1,265 @@
 window.App = (() => {
-  let analyzedReport = null;
+  const state = { reports: [], currentId: null, user: null, unsubscribe: null, editingId: null, draft: null };
+
+  function setHtml(html) {
+    document.getElementById('app').innerHTML = html;
+  }
 
   function render() {
-    const data = window.AppStore.load();
-    document.getElementById('app').innerHTML = window.AppUI.layout(data);
+    setHtml(window.AppUI.layout(state));
   }
 
-  function openSmart() {
-    const modal = document.getElementById('smartModal');
-    if (!modal) return;
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden', 'false');
-    setTimeout(() => document.getElementById('smartInput')?.focus(), 80);
+  function start() {
+    if (!window.FirebaseService.isConfigured) {
+      setHtml(window.AppUI.login(false));
+      return;
+    }
+    setHtml(window.AppUI.skeleton());
+    window.FirebaseService.onAuth(user => {
+      state.user = user;
+      if (!user) {
+        if (state.unsubscribe) state.unsubscribe();
+        setHtml(window.AppUI.login(true));
+        return;
+      }
+      window.FirebaseService.seedSettings().catch(console.warn);
+      if (state.unsubscribe) state.unsubscribe();
+      state.unsubscribe = window.FirebaseService.listenReports(reports => {
+        state.reports = reports;
+        state.currentId = state.currentId || reports[0]?.id || null;
+        render();
+      });
+    });
   }
 
-  function closeSmart() {
-    const modal = document.getElementById('smartModal');
-    if (!modal) return;
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-    analyzedReport = null;
-  }
-
-  function clearSmartInput() {
-    const input = document.getElementById('smartInput');
-    const result = document.getElementById('analysisResult');
-    if (input) input.value = '';
-    if (result) result.innerHTML = '';
-    analyzedReport = null;
-  }
-
-  function analyzeSmart() {
-    const result = document.getElementById('analysisResult');
+  async function login(event) {
+    event.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
     try {
-      const text = document.getElementById('smartInput')?.value || '';
-      analyzedReport = window.ReportParser.parse(text);
-      result.innerHTML = window.AppUI.analysis(analyzedReport);
+      setHtml(window.AppUI.skeleton());
+      await window.FirebaseService.signIn(email, password);
     } catch (error) {
-      result.innerHTML = `<div class="notice warn"><p>${window.AppUI.escape(error.message || 'تعذر تحليل التقرير.')}</p></div>`;
+      setHtml(window.AppUI.login(true));
+      alert('فشل تسجيل الدخول. تحقق من البريد وكلمة المرور ومن تفعيل Firebase Authentication.');
     }
   }
 
-  function saveAnalyzed() {
-    if (!analyzedReport) return;
-    const saved = window.AppStore.upsertReport(analyzedReport);
-    window.AppStore.selectReport(saved.id);
-    closeSmart();
-    render();
+  async function logout() {
+    await window.FirebaseService.signOut();
   }
 
   function select(id) {
-    window.AppStore.selectReport(id);
+    state.currentId = id;
     render();
   }
 
-  async function copyCurrent() {
-    const data = window.AppStore.load();
-    const report = (data.reports || []).find(item => item.id === data.currentId) || data.reports?.[0];
+  function openNew() {
+    state.editingId = null;
+    state.draft = window.ReportUtils.emptyReport();
+    openModalWithDraft();
+  }
+
+  function openEdit(id) {
+    const report = state.reports.find(item => item.id === id);
     if (!report) return;
-    await navigator.clipboard.writeText(window.AppUI.whatsappText(report));
-    alert('تم نسخ التقرير بصيغة واتساب.');
+    state.editingId = id;
+    state.draft = window.ReportUtils.recalc(report);
+    openModalWithDraft();
   }
 
-  function removeCurrent() {
-    const data = window.AppStore.load();
-    const report = (data.reports || []).find(item => item.id === data.currentId) || data.reports?.[0];
-    if (!report) return;
-    if (!confirm('هل تريد حذف هذا التقرير؟')) return;
-    window.AppStore.deleteReport(report.id);
+  function openModalWithDraft() {
     render();
+    const modal = document.getElementById('reportModal');
+    const host = document.getElementById('formHost');
+    if (!modal || !host) return;
+    host.innerHTML = window.AppUI.reportForm(state.draft);
+    modal.classList.add('open');
+    bindTabs();
   }
 
-  function clearAll() {
-    if (!confirm('هل تريد حذف جميع التقارير المحفوظة على هذا الجهاز؟')) return;
-    window.AppStore.clearReports();
-    render();
+  function closeModal() {
+    const modal = document.getElementById('reportModal');
+    if (modal) modal.classList.remove('open');
   }
 
-  function exportExcel() {
-    const data = window.AppStore.load();
-    const rows = [['date','title','start','end','hours','fuel_added','fuel_consumed','water_total','cars_total','beneficiaries']];
-    (data.reports || []).forEach(report => {
-      rows.push([
-        report.date,
-        report.title,
-        report.generatorStart,
-        report.generatorEnd,
-        report.runHours,
-        report.fuelAdded,
-        report.fuelConsumed,
-        report.totalQuantity,
-        report.totalCars,
-        (report.beneficiaries || []).map(item => `${item.name}: ${item.quantity}/${item.cars}`).join(' | ')
-      ]);
+  function togglePaste() {
+    document.getElementById('pasteText')?.classList.toggle('hidden');
+    document.getElementById('parseBtn')?.classList.toggle('hidden');
+  }
+
+  function parseText() {
+    try {
+      const text = document.getElementById('pasteText').value;
+      const parsed = window.ReportParser.parse(text);
+      state.draft = window.ReportUtils.fromParsed(parsed);
+      document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
+      bindTabs();
+    } catch (error) {
+      alert(error.message || 'تعذر تحليل النص.');
+    }
+  }
+
+  function bindTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', event => {
+        event.preventDefault();
+        const id = tab.dataset.tab;
+        document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(item => item.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelector(`[data-panel="${id}"]`)?.classList.add('active');
+      });
     });
-    const csv = '\ufeff' + rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = 'water-reports.csv';
-    link.click();
   }
 
-  return { render, openSmart, closeSmart, clearSmartInput, analyzeSmart, saveAnalyzed, select, copyCurrent, removeCurrent, clearAll, exportExcel };
+  function collectForm() {
+    const form = document.getElementById('reportForm');
+    const data = new FormData(form);
+    const beneficiaries = [...document.querySelectorAll('[data-b="name"]')].map(input => {
+      const i = input.dataset.i;
+      return {
+        id: state.draft?.beneficiaries?.[i]?.id || `b-${Date.now()}-${i}`,
+        name: input.value,
+        quantity: document.querySelector(`[data-b="quantity"][data-i="${i}"]`)?.value || '',
+        cars: document.querySelector(`[data-b="cars"][data-i="${i}"]`)?.value || '',
+        notes: document.querySelector(`[data-b="notes"][data-i="${i}"]`)?.value || ''
+      };
+    }).filter(item => item.name || item.quantity || item.cars);
+
+    const report = {
+      ...(state.draft || window.ReportUtils.emptyReport()),
+      title: data.get('title'),
+      reportDate: data.get('reportDate'),
+      stationName: data.get('stationName'),
+      wellName: data.get('wellName'),
+      operatorName: data.get('operatorName'),
+      generalNotes: data.get('generalNotes'),
+      generator: {
+        periods: [{ startTime: data.get('generatorStart'), stopTime: data.get('generatorEnd'), runHours: data.get('totalRunHours') }],
+        totalRunHours: data.get('totalRunHours'),
+        status: data.get('generatorStatus'),
+        operatorName: data.get('generatorOperator'),
+        notes: data.get('generatorNotes'),
+        extraFields: []
+      },
+      fuel: {
+        addedDaily: data.get('fuelAdded'),
+        consumedDaily: data.get('fuelConsumed'),
+        municipalSupplied: data.get('fuelMunicipal'),
+        previousBalance: data.get('fuelPrevious'),
+        currentBalance: data.get('fuelCurrent'),
+        loss: data.get('fuelLoss'),
+        notes: data.get('fuelNotes'),
+        extraFields: []
+      },
+      water: {
+        dailyProduction: data.get('dailyProduction'),
+        rejectWater: data.get('rejectWater'),
+        lossPercentage: data.get('lossPercentage'),
+        filledWater: data.get('filledWater'),
+        carsCount: data.get('carsCount'),
+        averagePerCar: data.get('averagePerCar'),
+        notes: data.get('waterNotes')
+      },
+      tests: {
+        phAfterDesalination: data.get('phAfter'),
+        phWellWater: data.get('phWell'),
+        tdsDesalinated: data.get('tdsFiltered'),
+        tdsWell: data.get('tdsWell'),
+        tdsReject: data.get('tdsReject'),
+        freeChlorine: data.get('freeChlorine'),
+        extraFields: []
+      },
+      beneficiaries
+    };
+    return window.ReportUtils.recalc(report);
+  }
+
+  function addBeneficiary() {
+    state.draft = collectSafeDraft();
+    state.draft.beneficiaries.push({ id: `b-${Date.now()}`, name: '', quantity: '', cars: '', notes: '' });
+    document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
+    bindTabs();
+    document.querySelector('[data-tab="beneficiaries"]')?.click();
+  }
+
+  function removeBeneficiary(index) {
+    state.draft = collectSafeDraft();
+    state.draft.beneficiaries.splice(index, 1);
+    document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
+    bindTabs();
+    document.querySelector('[data-tab="beneficiaries"]')?.click();
+  }
+
+  function collectSafeDraft() {
+    try { return collectForm(); } catch { return state.draft || window.ReportUtils.emptyReport(); }
+  }
+
+  async function saveReport() {
+    try {
+      const report = collectForm();
+      const id = await window.FirebaseService.saveReport(report, state.user, state.editingId);
+      state.currentId = id;
+      closeModal();
+    } catch (error) {
+      alert('تعذر حفظ التقرير في Firestore. راجع إعداد Firebase والصلاحيات.');
+      console.error(error);
+    }
+  }
+
+  async function deleteReport(id) {
+    if (!confirm('هل تريد حذف التقرير نهائيًا؟')) return;
+    await window.FirebaseService.deleteReport(id, state.user);
+  }
+
+  async function copyWhatsApp(id) {
+    const report = state.reports.find(item => item.id === id);
+    if (!report) return;
+    const text = window.ReportUtils.whatsappText(report);
+    await navigator.clipboard.writeText(text);
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  }
+
+  function exportPdf(id) {
+    const report = state.reports.find(item => item.id === id);
+    if (!report) return;
+    const w = window.open('', '_blank');
+    w.document.write(`<html lang="ar" dir="rtl"><head><title>${report.title}</title><style>body{font-family:Tahoma,Arial;direction:rtl;padding:32px;line-height:1.9}pre{white-space:pre-wrap;font-size:15px}.footer{margin-top:30px;color:#666;border-top:1px solid #ddd;padding-top:10px}</style></head><body><pre>${window.AppUI.esc(window.ReportUtils.whatsappText(report))}</pre><div class="footer">تم توليد التقرير: ${new Date().toLocaleString('ar')}</div><script>print()<\/script></body></html>`);
+    w.document.close();
+  }
+
+  function workbookForReports(reports) {
+    const wb = XLSX.utils.book_new();
+    const general = reports.map(r => ({ 'التاريخ': r.reportDate, 'العنوان': r.title, 'المحطة': r.stationName, 'البئر': r.wellName, 'المشغل': r.operatorName }));
+    const generator = reports.map(r => ({ 'التاريخ': r.reportDate, 'البداية': r.generator?.periods?.[0]?.startTime, 'الإيقاف': r.generator?.periods?.[0]?.stopTime, 'الساعات': r.generator?.totalRunHours, 'الحالة': r.generator?.status }));
+    const fuel = reports.map(r => ({ 'التاريخ': r.reportDate, 'مضاف': r.fuel?.addedDaily, 'مستهلك': r.fuel?.consumedDaily, 'مورد من البلدية': r.fuel?.municipalSupplied, 'رصيد سابق': r.fuel?.previousBalance, 'رصيد حالي': r.fuel?.currentBalance, 'فاقد': r.fuel?.loss }));
+    const water = reports.map(r => ({ 'التاريخ': r.reportDate, 'الإنتاج': r.water?.dailyProduction, 'العادم': r.water?.rejectWater, 'نسبة الفاقد': r.water?.lossPercentage, 'المعبأ': r.water?.filledWater, 'السيارات': r.water?.carsCount, 'متوسط السيارة': r.water?.averagePerCar }));
+    const tests = reports.map(r => ({ 'التاريخ': r.reportDate, 'PH بعد التحلية': r.tests?.phAfterDesalination, 'PH الغاطس': r.tests?.phWellWater, 'TDS محلاة': r.tests?.tdsDesalinated, 'TDS بئر': r.tests?.tdsWell, 'TDS عادم': r.tests?.tdsReject, 'الكلور الحر': r.tests?.freeChlorine }));
+    const beneficiaries = reports.flatMap(r => (r.beneficiaries || []).map(b => ({ 'التاريخ': r.reportDate, 'الجهة': b.name, 'الكمية': b.quantity, 'السيارات': b.cars, 'ملاحظات': b.notes })));
+    const s = window.ReportUtils.summary(reports);
+    const summary = [{ 'إجمالي ساعات التشغيل': s.runHours, 'إجمالي الوقود المستهلك': s.fuelConsumed, 'إجمالي الوقود المورد': s.fuelSupplied, 'إجمالي الإنتاج': s.waterProduction, 'إجمالي العادم': s.rejectWater, 'إجمالي المعبأ': s.filledWater, 'إجمالي السيارات': s.cars, 'متوسط الإنتاج اليومي': s.averageDailyProduction, 'نسبة الفاقد': s.lossPercentage }];
+    [['General', general], ['Generator', generator], ['Fuel', fuel], ['Water Quantities', water], ['Water Tests', tests], ['Beneficiaries', beneficiaries], ['Summary', summary]].forEach(([name, rows]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name));
+    return wb;
+  }
+
+  function exportOneExcel(id) {
+    const report = state.reports.find(item => item.id === id);
+    if (!report) return;
+    XLSX.writeFile(workbookForReports([report]), `${report.title}.xlsx`);
+  }
+
+  function exportAllExcel() {
+    XLSX.writeFile(workbookForReports(state.reports), 'تقارير تشغيل وضخ المياه.xlsx');
+  }
+
+  function openSummary() {
+    const s = window.ReportUtils.summary(state.reports);
+    alert(`ملخص التقارير\nساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`);
+  }
+
+  return { start, login, logout, render, select, openNew, openEdit, closeModal, togglePaste, parseText, addBeneficiary, removeBeneficiary, saveReport, deleteReport, copyWhatsApp, exportPdf, exportOneExcel, exportAllExcel, openSummary };
 })();
 
-window.addEventListener('DOMContentLoaded', () => window.App.render());
+window.addEventListener('DOMContentLoaded', () => window.App.start());
