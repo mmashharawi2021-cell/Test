@@ -1,77 +1,52 @@
 window.AppUI = (() => {
-  const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
-  const date = value => window.ReportParser.displayDate(value);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const d = v => window.ReportUtils.displayDate(v);
+  const n = v => Number(v || 0);
 
-  function whatsappText(report) {
-    const rows = (report.beneficiaries || []).map(item => `▪️ ${item.name}\nالكمية/ ${item.quantity} كوب ، عدد السيارات/ ${item.cars}`).join('\n\n');
-    return `*${report.title}*\n\n⏱️ ساعة تشغيل المولد: ${report.generatorStart || '-'}\n⏹️ ساعة الإيقاف: ${report.generatorEnd || '-'}\n⏳ ساعات التشغيل: ${report.runHours || '-'} ساعات\n\n⛽ استهلاك الوقود:\n▪️ إجمالي الوقود المضاف يومياً: ${report.fuelAdded || '_'} لتر\n▪️ إجمالي الوقود المستهلك يومياً: ${report.fuelConsumed || '_'} لتر\n⛽️ إجمالي الوقود المورد من البلدية: ${report.fuelMunicipal || '_'}\n⛽️ إجمالي الوقود المتبقي: ${report.fuelBalance || '_'} لتر\n\n💧 كميات الضخ (بالكوب):\n▪️ كمية انتاج الغاطس: ${report.submersibleRate || '_'} كوب/ساعة\n▪️ كمية المياه بعد الفلترة: ${report.filteredRate || '_'} كوب/ساعة\n▪️ كمية العادم: ${report.wasteQuantity || '_'} كوب\n\n🧪 فحوصات المياه:\n▪️ درجة الحامضيه بعد التحلية Ph: ${report.phFiltered || '_'}\n▪️ درجة الحامضيه لمياه الغاطس Ph: ${report.phWell || '_'}\n▪️ تركيز الأملاح الذائبه (مياه محلاه) ${report.tdsFiltered || '_'} :TDS\n▪️ تركيز الأملاح الذائبه (بئر مياه) ${report.tdsWell || '_'} :TDS\n▪️ تركيز الأملاح الذائبه (عادم) ${report.tdsWaste || '_'}: TDS\n▪️ تركيز الكلور الحر: ${report.chlorine || '_'} مليجرام/لتر\n\n🚚 الإنتاج اليومي:\n${rows}\n\n▪️ إجمالي كمية المياه المعبأة: ${report.totalQuantity || 0} كوب\n▪️ إجمالي عدد السيارات: ${report.totalCars || 0} سيارة`;
+  function login(configured) {
+    return `<main class="login-screen"><section class="login-card"><div class="water-mark">💧</div><p class="eyebrow">منصة تشغيل رسمية</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p class="muted">دخول صالح الدحنون لإدارة تقارير التشغيل والوقود والمياه والفحوصات.</p>${!configured ? `<div class="notice warn"><p>Firebase غير مفعّل بعد. عدّل ملف assets/firebase-config.js ببيانات مشروعك.</p></div>` : ''}<form onsubmit="App.login(event)" class="login-form"><label>البريد الإلكتروني</label><input id="loginEmail" type="email" required placeholder="email@example.com"><label>كلمة المرور</label><input id="loginPassword" type="password" required placeholder="••••••••"><button class="btn primary big" type="submit">دخول</button></form></section></main>`;
   }
 
-  function stats(reports) {
-    return {
-      count: reports.length,
-      water: reports.reduce((sum, item) => sum + Number(item.totalQuantity || 0), 0),
-      cars: reports.reduce((sum, item) => sum + Number(item.totalCars || 0), 0),
-      fuel: reports.reduce((sum, item) => sum + Number(item.fuelConsumed || 0), 0)
-    };
+  function skeleton() {
+    return `<main class="app-shell"><section class="hero skeleton-card"></section><section class="stats"><article></article><article></article><article></article><article></article></section><section class="workspace"><aside class="archive skeleton-card"></aside><section class="details skeleton-card"></section></section></main>`;
   }
 
   function card(report, activeId) {
-    return `<button class="report-card ${report.id === activeId ? 'active' : ''}" onclick="App.select('${report.id}')">
-      <span>${date(report.date)}</span>
-      <strong>${escape(report.title)}</strong>
-      <small>${report.totalQuantity || 0} كوب • ${report.totalCars || 0} سيارة • ${report.fuelConsumed || 0} لتر</small>
-    </button>`;
+    const r = window.ReportUtils.recalc(report);
+    return `<button class="report-card ${r.id === activeId ? 'active' : ''}" onclick="App.select('${r.id}')"><span>${d(r.reportDate)}</span><strong>${esc(r.title)}</strong><small>${r.stationName || '-'} • تشغيل ${r.generator.totalRunHours || '-'} • وقود ${r.fuel.consumedDaily || 0} لتر</small><em>${r.water.filledWater || 0} كوب معبأ • ${r.water.carsCount || 0} سيارة</em></button>`;
   }
 
   function details(report) {
-    if (!report) return `<section class="details empty-state"><div class="empty-icon">📄</div><h2>لا يوجد تقرير محدد</h2><p>اضغط تعبئة تلقائية والصق تقرير واتساب كامل.</p></section>`;
-    const warnings = (report.warnings || []).length ? `<div class="notice warn"><strong>تنبيهات:</strong>${report.warnings.map(item => `<p>${escape(item)}</p>`).join('')}</div>` : '';
-    return `<section class="details">
-      <div class="section-head">
-        <div><p class="eyebrow">معاينة التقرير</p><h2>${escape(report.title)}</h2></div>
-        <div class="actions"><button class="btn primary" onclick="App.copyCurrent()">نسخ واتساب</button><button class="btn" onclick="window.print()">PDF</button><button class="btn danger" onclick="App.removeCurrent()">حذف</button></div>
-      </div>
-      ${warnings}
-      <div class="report-preview">${escape(whatsappText(report))}</div>
-    </section>`;
+    if (!report) return `<section class="details empty-state"><div class="empty-icon">📄</div><h2>لا توجد تقارير بعد</h2><p>اضغط إضافة تقرير جديد وابدأ بإدخال تقرير اليوم.</p></section>`;
+    const r = window.ReportUtils.recalc(report);
+    const warnings = r.warnings?.length ? `<div class="notice warn">${r.warnings.map(w => `<p>${esc(w)}</p>`).join('')}</div>` : '';
+    return `<section class="details"><div class="section-head"><div><p class="eyebrow">تفاصيل التقرير</p><h2>${esc(r.title)}</h2></div><div class="actions"><button class="btn primary" onclick="App.openEdit('${r.id}')">تعديل</button><button class="btn" onclick="App.copyWhatsApp('${r.id}')">واتساب</button><button class="btn" onclick="App.exportPdf('${r.id}')">PDF</button><button class="btn" onclick="App.exportOneExcel('${r.id}')">Excel</button><button class="btn danger" onclick="App.deleteReport('${r.id}')">حذف</button></div></div>${warnings}<div class="detail-grid"><article><span>التاريخ</span><strong>${d(r.reportDate)}</strong></article><article><span>المحطة</span><strong>${esc(r.stationName)}</strong></article><article><span>ساعات التشغيل</span><strong>${r.generator.totalRunHours || '-'}</strong></article><article><span>الوقود المستهلك</span><strong>${r.fuel.consumedDaily || 0} لتر</strong></article><article><span>الإنتاج اليومي</span><strong>${r.water.dailyProduction || 0} كوب</strong></article><article><span>المعبأ</span><strong>${r.water.filledWater || 0} كوب</strong></article><article><span>السيارات</span><strong>${r.water.carsCount || 0}</strong></article><article><span>نسبة الفاقد</span><strong>${r.water.lossPercentage || 0}%</strong></article></div><div class="report-preview">${esc(window.ReportUtils.whatsappText(r))}</div></section>`;
+  }
+
+  function reportForm(report) {
+    const r = window.ReportUtils.recalc(report || window.ReportUtils.emptyReport());
+    const bRows = (r.beneficiaries || []).map((b, i) => `<tr><td><input data-b="name" data-i="${i}" value="${esc(b.name)}"></td><td><input data-b="quantity" data-i="${i}" type="number" value="${b.quantity || ''}"></td><td><input data-b="cars" data-i="${i}" type="number" value="${b.cars || ''}"></td><td><input data-b="notes" data-i="${i}" value="${esc(b.notes || '')}"></td><td><button class="mini danger" onclick="App.removeBeneficiary(${i})" type="button">حذف</button></td></tr>`).join('');
+    return `<div class="tabs"><button class="tab active" data-tab="general">بيانات عامة</button><button class="tab" data-tab="generator">تشغيل المولد</button><button class="tab" data-tab="fuel">الوقود</button><button class="tab" data-tab="water">كميات المياه</button><button class="tab" data-tab="tests">الفحوصات</button><button class="tab" data-tab="beneficiaries">الجهات</button><button class="tab" data-tab="preview">المعاينة</button></div><form id="reportForm" class="form-grid">
+      <section class="tab-panel active" data-panel="general"><label>عنوان التقرير<input name="title" value="${esc(r.title)}"></label><label>تاريخ التقرير<input name="reportDate" type="date" value="${r.reportDate || ''}"></label><label>المحطة<input name="stationName" value="${esc(r.stationName || '')}"></label><label>اسم البئر<input name="wellName" value="${esc(r.wellName || '')}"></label><label>اسم المشغل<input name="operatorName" value="${esc(r.operatorName || '')}"></label><label class="wide">ملاحظات عامة<textarea name="generalNotes">${esc(r.generalNotes || '')}</textarea></label></section>
+      <section class="tab-panel" data-panel="generator"><label>وقت التشغيل<input name="generatorStart" type="time" value="${r.generator.periods?.[0]?.startTime || ''}"></label><label>وقت الإيقاف<input name="generatorEnd" type="time" value="${r.generator.periods?.[0]?.stopTime || ''}"></label><label>ساعات التشغيل<input name="totalRunHours" value="${r.generator.totalRunHours || ''}"></label><label>حالة المولد<input name="generatorStatus" value="${esc(r.generator.status || '')}"></label><label>مشغل المولد<input name="generatorOperator" value="${esc(r.generator.operatorName || '')}"></label><label class="wide">ملاحظات المولد<textarea name="generatorNotes">${esc(r.generator.notes || '')}</textarea></label></section>
+      <section class="tab-panel" data-panel="fuel"><label>الوقود المضاف يومياً<input name="fuelAdded" type="number" value="${r.fuel.addedDaily || ''}"></label><label>الوقود المستهلك يومياً<input name="fuelConsumed" type="number" value="${r.fuel.consumedDaily || ''}"></label><label>المورد من البلدية<input name="fuelMunicipal" type="number" value="${r.fuel.municipalSupplied || ''}"></label><label>الرصيد السابق<input name="fuelPrevious" type="number" value="${r.fuel.previousBalance || ''}"></label><label>الرصيد الحالي<input name="fuelCurrent" type="number" value="${r.fuel.currentBalance || ''}"></label><label>الفرق/الفاقد<input name="fuelLoss" type="number" value="${r.fuel.loss || ''}"></label><label class="wide">ملاحظات الوقود<textarea name="fuelNotes">${esc(r.fuel.notes || '')}</textarea></label></section>
+      <section class="tab-panel" data-panel="water"><label>الإنتاج اليومي بالكوب<input name="dailyProduction" type="number" value="${r.water.dailyProduction || ''}"></label><label>العادم/الفاقد بالكوب<input name="rejectWater" type="number" value="${r.water.rejectWater || ''}"></label><label>نسبة الفاقد %<input name="lossPercentage" type="number" value="${r.water.lossPercentage || ''}"></label><label>المعبأ للجهات<input name="filledWater" type="number" value="${r.water.filledWater || ''}" readonly></label><label>عدد السيارات<input name="carsCount" type="number" value="${r.water.carsCount || ''}" readonly></label><label>متوسط السيارة<input name="averagePerCar" type="number" value="${r.water.averagePerCar || ''}" readonly></label><label class="wide">ملاحظات المياه<textarea name="waterNotes">${esc(r.water.notes || '')}</textarea></label></section>
+      <section class="tab-panel" data-panel="tests"><label>PH بعد التحلية<input name="phAfter" value="${r.tests.phAfterDesalination || ''}"></label><label>PH مياه الغاطس<input name="phWell" value="${r.tests.phWellWater || ''}"></label><label>TDS مياه محلاة<input name="tdsFiltered" value="${r.tests.tdsDesalinated || ''}"></label><label>TDS بئر<input name="tdsWell" value="${r.tests.tdsWell || ''}"></label><label>TDS عادم<input name="tdsReject" value="${r.tests.tdsReject || ''}"></label><label>الكلور الحر<input name="freeChlorine" value="${r.tests.freeChlorine || ''}"></label></section>
+      <section class="tab-panel wide" data-panel="beneficiaries"><div class="table-wrap"><table><thead><tr><th>الجهة</th><th>الكمية</th><th>السيارات</th><th>ملاحظات</th><th></th></tr></thead><tbody id="beneficiariesRows">${bRows || '<tr><td colspan="5">لا توجد جهات بعد.</td></tr>'}</tbody></table></div><button class="btn" type="button" onclick="App.addBeneficiary()">إضافة جهة</button></section>
+      <section class="tab-panel wide" data-panel="preview"><div class="report-preview">${esc(window.ReportUtils.whatsappText(r))}</div></section>
+    </form>`;
   }
 
   function modal() {
-    return `<div id="smartModal" class="modal" aria-hidden="true">
-      <div class="modal-backdrop" onclick="App.closeSmart()"></div>
-      <div class="modal-panel">
-        <button class="close" onclick="App.closeSmart()">×</button>
-        <div class="modal-title"><span>⚡</span><div><h2>إضافة تقرير جديد</h2><p>الصق تقرير واتساب كما هو، ثم راجع النتيجة قبل الحفظ.</p></div></div>
-        <textarea id="smartInput" class="smart-input" placeholder="الصق تقرير تشغيل وضخ المياه هنا..."></textarea>
-        <div class="actions modal-actions"><button class="btn primary" onclick="App.analyzeSmart()">تحليل التقرير</button><button class="btn" onclick="App.clearSmartInput()">تفريغ</button></div>
-        <div id="analysisResult" class="analysis"></div>
-      </div>
-    </div>`;
+    return `<div id="reportModal" class="modal"><div class="modal-backdrop" onclick="App.closeModal()"></div><div class="modal-panel large"><button class="close" onclick="App.closeModal()">×</button><div class="modal-title"><span>📋</span><div><h2>إضافة / تعديل تقرير</h2><p>استخدم التعبئة التلقائية أو عدّل الحقول يدويًا قبل الحفظ.</p></div></div><div class="auto-box"><button class="btn primary" onclick="App.togglePaste()">تعبئة تلقائية من نص التقرير</button><textarea id="pasteText" class="smart-input hidden" placeholder="الصق تقرير واتساب الكامل هنا..."></textarea><div class="actions"><button id="parseBtn" class="btn hidden" onclick="App.parseText()">تحليل النص وملء الحقول</button></div></div><div id="formHost"></div><div class="actions modal-actions"><button class="btn primary big" onclick="App.saveReport()">حفظ التقرير</button><button class="btn" onclick="App.closeModal()">إلغاء</button></div></div></div>`;
   }
 
-  function analysis(report) {
-    const warnings = (report.warnings || []).length ? `<div class="notice warn">${report.warnings.map(item => `<p>${escape(item)}</p>`).join('')}</div>` : `<div class="notice ok">تم تحليل التقرير بدون فروقات واضحة.</div>`;
-    const rows = (report.beneficiaries || []).map(item => `<tr><td>${escape(item.name)}</td><td>${item.quantity}</td><td>${item.cars}</td></tr>`).join('');
-    return `${warnings}<div class="analysis-grid">
-      <div><span>التاريخ</span><strong>${date(report.date)}</strong></div><div><span>التشغيل</span><strong>${report.generatorStart || '-'}</strong></div><div><span>الإيقاف</span><strong>${report.generatorEnd || '-'}</strong></div><div><span>الساعات</span><strong>${report.runHours || '-'}</strong></div><div><span>الوقود</span><strong>${report.fuelConsumed || 0} لتر</strong></div><div><span>المياه</span><strong>${report.totalQuantity || 0} كوب</strong></div><div><span>السيارات</span><strong>${report.totalCars || 0}</strong></div><div><span>الجهات</span><strong>${(report.beneficiaries || []).length}</strong></div>
-    </div><div class="table-wrap"><table><thead><tr><th>الجهة</th><th>الكمية</th><th>السيارات</th></tr></thead><tbody>${rows || '<tr><td colspan="3">لا توجد جهات مقروءة.</td></tr>'}</tbody></table></div><div class="actions modal-actions"><button class="btn primary" onclick="App.saveAnalyzed()">حفظ التقرير</button></div>`;
+  function layout(state) {
+    const reports = state.reports || [];
+    const active = reports.find(r => r.id === state.currentId) || reports[0];
+    const s = window.ReportUtils.summary(reports);
+    return `<main class="app-shell"><header class="hero"><div><p class="eyebrow">لوحة صالح الدحنون</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p>منصة يومية رسمية للتشغيل، الوقود، الإنتاج، الفحوصات، الجهات المستفيدة، والأرشفة.</p></div><div class="hero-actions"><button class="btn primary big" onclick="App.openNew()">إضافة تقرير جديد</button><button class="btn" onclick="App.openSummary()">تقارير تجميعية</button><button class="btn" onclick="App.exportAllExcel()">Excel شامل</button><button class="btn ghost" onclick="App.logout()">خروج</button></div></header><section class="stats"><article><span>التقارير</span><strong>${reports.length}</strong></article><article><span>ساعات التشغيل</span><strong>${s.runHours.toFixed(1)}</strong></article><article><span>وقود مستهلك</span><strong>${s.fuelConsumed}</strong></article><article><span>مياه معبأة</span><strong>${s.filledWater}</strong></article></section><section class="workspace"><aside class="archive"><div class="section-head"><div><p class="eyebrow">الأرشيف</p><h2>كروت التقارير</h2></div></div><div class="cards">${reports.map(r => card(r, active?.id)).join('') || '<div class="empty-mini">لا توجد تقارير محفوظة.</div>'}</div></aside>${details(active)}</section>${modal()}</main>`;
   }
 
-  function layout(data) {
-    const reports = data.reports || [];
-    const active = reports.find(item => item.id === data.currentId) || reports[0];
-    const s = stats(reports);
-    const cards = reports.map(item => card(item, active?.id)).join('') || `<div class="empty-mini">لا توجد تقارير بعد.</div>`;
-    return `<main class="app-shell">
-      <header class="hero">
-        <div class="hero-copy"><p class="eyebrow">لوحة صالح الدحنون</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p>إدخال سريع من تقرير واتساب، حفظ كروت، معاينة رسمية، ونسخ جاهز للإرسال.</p></div>
-        <div class="hero-actions"><button class="btn primary big" onclick="App.openSmart()">⚡ تعبئة تلقائية</button><button class="btn" onclick="App.exportExcel()">تصدير Excel</button><button class="btn ghost" onclick="App.clearAll()">مسح البيانات</button></div>
-      </header>
-      <section class="stats"><article><span>عدد التقارير</span><strong>${s.count}</strong></article><article><span>إجمالي المياه</span><strong>${s.water}</strong></article><article><span>عدد السيارات</span><strong>${s.cars}</strong></article><article><span>وقود مستهلك</span><strong>${s.fuel}</strong></article></section>
-      <section class="workspace"><aside class="archive"><div class="section-head"><div><p class="eyebrow">الأرشيف</p><h2>كروت التقارير</h2></div></div><div class="cards">${cards}</div></aside>${details(active)}</section>${modal()}
-    </main>`;
-  }
-
-  return { layout, analysis, whatsappText, escape };
+  return { login, skeleton, layout, reportForm, esc };
 })();
