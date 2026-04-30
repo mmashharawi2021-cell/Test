@@ -89,14 +89,29 @@ window.App = (() => {
   }
 
   function parseText() {
+    const host = document.getElementById('formHost');
+    const paste = document.getElementById('pasteText');
     try {
-      const text = document.getElementById('pasteText').value;
+      const text = paste?.value || '';
+      if (!text.trim()) {
+        alert('الصق نص التقرير أولًا داخل مربع التعبئة التلقائية.');
+        return;
+      }
       const parsed = window.ReportParser.parse(text);
       state.draft = window.ReportUtils.fromParsed(parsed);
-      document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
+      const warnings = state.draft.warnings?.length
+        ? `<div class="notice warn"><strong>تنبيهات التحليل:</strong>${state.draft.warnings.map(w => `<p>${window.AppUI.esc(w)}</p>`).join('')}</div>`
+        : '';
+      const info = `<div class="notice ok"><p>تم تحليل النص وملء الحقول.</p><p>التاريخ: ${window.ReportUtils.displayDate(state.draft.reportDate)} | الجهات: ${(state.draft.beneficiaries || []).length} | المياه: ${state.draft.water.filledWater || 0} كوب | السيارات: ${state.draft.water.carsCount || 0}</p></div>`;
+      host.innerHTML = info + warnings + window.AppUI.reportForm(state.draft);
       bindTabs();
+      document.querySelector('[data-tab="general"]')?.click();
+      host.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
-      alert(error.message || 'تعذر تحليل النص.');
+      const message = error?.message || 'تعذر تحليل النص.';
+      if (host) host.insertAdjacentHTML('afterbegin', `<div class="notice warn"><p>${window.AppUI.esc(message)}</p></div>`);
+      alert(message);
+      console.error(error);
     }
   }
 
