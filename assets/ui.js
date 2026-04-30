@@ -4,7 +4,7 @@ window.AppUI = (() => {
   const n = v => Number(v || 0);
 
   function login(configured) {
-    return `<main class="login-screen"><section class="login-card"><div class="water-mark">💧</div><p class="eyebrow">منصة تشغيل رسمية</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p class="muted">دخول صالح الدحنون لإدارة تقارير التشغيل والوقود والمياه والفحوصات.</p>${!configured ? `<div class="notice warn"><p>Firebase غير مفعّل بعد. عدّل ملف assets/firebase-config.js ببيانات مشروعك.</p></div>` : ''}<form onsubmit="App.login(event)" class="login-form"><label>البريد الإلكتروني</label><input id="loginEmail" type="email" required placeholder="email@example.com"><label>كلمة المرور</label><input id="loginPassword" type="password" required placeholder="••••••••"><button class="btn primary big" type="submit">دخول</button></form></section></main>`;
+    return `<main class="login-screen"><section class="login-card"><div class="water-mark">💧</div><p class="eyebrow">منصة تشغيل رسمية</p><h1>نظام تقارير تشغيل وضخ المياه</h1><p class="muted">دخول صالح الدحنون لإدارة تقارير التشغيل والوقود والمياه والفحوصات.</p>${!configured ? `<div class="notice warn"><p>Firebase غير مفعّل بعد. عدّل ملف assets/firebase-config.js ببيانات مشروعك.</p></div>` : ''}<form onsubmit="App.login(event)" class="login-form"><label>اسم المستخدم</label><input id="loginUsername" type="text" required value="صالح الدحنون" autocomplete="username"><label>كلمة المرور</label><input id="loginPassword" type="password" required value="صالح الدحنون" autocomplete="current-password"><button class="btn primary big" type="submit">دخول</button></form></section></main>`;
   }
 
   function skeleton() {
