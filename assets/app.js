@@ -10,6 +10,38 @@ window.App = (() => {
     setHtml(window.AppUI.layout(state));
   }
 
+  function toast(message, type = 'ok') {
+    const wrap = document.createElement('div');
+    wrap.className = `toast-message ${type}`;
+    wrap.textContent = message;
+    document.body.appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add('show'));
+    setTimeout(() => {
+      wrap.classList.remove('show');
+      setTimeout(() => wrap.remove(), 220);
+    }, 2600);
+  }
+
+  function confirmDialog({ title = 'تأكيد الإجراء', message = '', confirmText = 'تأكيد', cancelText = 'إلغاء', danger = false } = {}) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = `<div class="confirm-card ${danger ? 'danger' : ''}"><div class="confirm-icon">${danger ? '⚠️' : '✅'}</div><h3>${window.AppUI.esc(title)}</h3><p>${window.AppUI.esc(message)}</p><div class="confirm-actions"><button class="btn ${danger ? 'danger' : 'primary'}" data-confirm="yes">${window.AppUI.esc(confirmText)}</button><button class="btn" data-confirm="no">${window.AppUI.esc(cancelText)}</button></div></div>`;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('show'));
+      const close = result => {
+        overlay.classList.remove('show');
+        setTimeout(() => overlay.remove(), 180);
+        resolve(result);
+      };
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) close(false);
+        if (event.target?.dataset?.confirm === 'yes') close(true);
+        if (event.target?.dataset?.confirm === 'no') close(false);
+      });
+    });
+  }
+
   function start() {
     if (!window.FirebaseService.isConfigured) {
       setHtml(window.AppUI.login(false));
@@ -20,6 +52,7 @@ window.App = (() => {
       state.user = user;
       if (!user) {
         if (state.unsubscribe) state.unsubscribe();
+        state.currentId = null;
         setHtml(window.AppUI.login(true));
         return;
       }
@@ -28,7 +61,7 @@ window.App = (() => {
       if (state.unsubscribe) state.unsubscribe();
       state.unsubscribe = window.FirebaseService.listenReports(reports => {
         state.reports = reports;
-        state.currentId = state.currentId || reports[0]?.id || null;
+        if (state.currentId && !reports.some(item => item.id === state.currentId)) state.currentId = null;
         render();
       });
     });
@@ -41,19 +74,26 @@ window.App = (() => {
     try {
       setHtml(window.AppUI.skeleton());
       await window.FirebaseService.signIn(username, password);
+      toast('تم تسجيل الدخول بنجاح', 'ok');
     } catch (error) {
       setHtml(window.AppUI.login(true));
-      alert('بيانات الدخول غير صحيحة أو لم يتم تفعيل Anonymous Authentication في Firebase.');
+      toast('بيانات الدخول غير صحيحة أو إعدادات Firebase غير مكتملة', 'warn');
     }
   }
 
   async function logout() {
+    const ok = await confirmDialog({ title: 'تسجيل الخروج', message: 'هل تريد الخروج من النظام؟', confirmText: 'خروج', cancelText: 'بقاء' });
+    if (!ok) return;
     await window.FirebaseService.signOut();
+    toast('تم تسجيل الخروج', 'ok');
   }
 
   function select(id) {
     state.currentId = id;
     render();
+    requestAnimationFrame(() => {
+      document.getElementById('reportDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function openNew() {
@@ -96,7 +136,7 @@ window.App = (() => {
     try {
       const text = paste?.value || '';
       if (!text.trim()) {
-        alert('الصق نص التقرير أولًا داخل مربع التعبئة التلقائية.');
+        toast('الصق نص التقرير أولًا', 'warn');
         return;
       }
       const parsed = window.ReportParser.parse(text);
@@ -109,10 +149,11 @@ window.App = (() => {
       bindTabs();
       document.querySelector('[data-tab="general"]')?.click();
       host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('تم تحليل التقرير وملء الحقول', 'ok');
     } catch (error) {
       const message = error?.message || 'تعذر تحليل النص.';
       if (host) host.insertAdjacentHTML('afterbegin', `<div class="notice warn"><p>${window.AppUI.esc(message)}</p></div>`);
-      alert(message);
+      toast(message, 'warn');
       console.error(error);
     }
   }
@@ -152,42 +193,10 @@ window.App = (() => {
       wellName: data.get('wellName'),
       operatorName: data.get('operatorName'),
       generalNotes: data.get('generalNotes'),
-      generator: {
-        periods: [{ startTime: data.get('generatorStart'), stopTime: data.get('generatorEnd'), runHours: data.get('totalRunHours') }],
-        totalRunHours: data.get('totalRunHours'),
-        status: data.get('generatorStatus'),
-        operatorName: data.get('generatorOperator'),
-        notes: data.get('generatorNotes'),
-        extraFields: []
-      },
-      fuel: {
-        addedDaily: data.get('fuelAdded'),
-        consumedDaily: data.get('fuelConsumed'),
-        municipalSupplied: data.get('fuelMunicipal'),
-        previousBalance: data.get('fuelPrevious'),
-        currentBalance: data.get('fuelCurrent'),
-        loss: data.get('fuelLoss'),
-        notes: data.get('fuelNotes'),
-        extraFields: []
-      },
-      water: {
-        dailyProduction: data.get('dailyProduction'),
-        rejectWater: data.get('rejectWater'),
-        lossPercentage: data.get('lossPercentage'),
-        filledWater: data.get('filledWater'),
-        carsCount: data.get('carsCount'),
-        averagePerCar: data.get('averagePerCar'),
-        notes: data.get('waterNotes')
-      },
-      tests: {
-        phAfterDesalination: data.get('phAfter'),
-        phWellWater: data.get('phWell'),
-        tdsDesalinated: data.get('tdsFiltered'),
-        tdsWell: data.get('tdsWell'),
-        tdsReject: data.get('tdsReject'),
-        freeChlorine: data.get('freeChlorine'),
-        extraFields: []
-      },
+      generator: { periods: [{ startTime: data.get('generatorStart'), stopTime: data.get('generatorEnd'), runHours: data.get('totalRunHours') }], totalRunHours: data.get('totalRunHours'), status: data.get('generatorStatus'), operatorName: data.get('generatorOperator'), notes: data.get('generatorNotes'), extraFields: [] },
+      fuel: { addedDaily: data.get('fuelAdded'), consumedDaily: data.get('fuelConsumed'), municipalSupplied: data.get('fuelMunicipal'), previousBalance: data.get('fuelPrevious'), currentBalance: data.get('fuelCurrent'), loss: data.get('fuelLoss'), notes: data.get('fuelNotes'), extraFields: [] },
+      water: { dailyProduction: data.get('dailyProduction'), rejectWater: data.get('rejectWater'), lossPercentage: data.get('lossPercentage'), filledWater: data.get('filledWater'), carsCount: data.get('carsCount'), averagePerCar: data.get('averagePerCar'), notes: data.get('waterNotes') },
+      tests: { phAfterDesalination: data.get('phAfter'), phWellWater: data.get('phWell'), tdsDesalinated: data.get('tdsFiltered'), tdsWell: data.get('tdsWell'), tdsReject: data.get('tdsReject'), freeChlorine: data.get('freeChlorine'), extraFields: [] },
       beneficiaries
     };
     return window.ReportUtils.recalc(report);
@@ -201,12 +210,15 @@ window.App = (() => {
     document.querySelector('[data-tab="beneficiaries"]')?.click();
   }
 
-  function removeBeneficiary(index) {
+  async function removeBeneficiary(index) {
+    const ok = await confirmDialog({ title: 'حذف جهة', message: 'سيتم حذف هذه الجهة من التقرير الحالي فقط.', confirmText: 'حذف', cancelText: 'إلغاء', danger: true });
+    if (!ok) return;
     state.draft = collectSafeDraft();
     state.draft.beneficiaries.splice(index, 1);
     document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
     bindTabs();
     document.querySelector('[data-tab="beneficiaries"]')?.click();
+    toast('تم حذف الجهة من النموذج', 'ok');
   }
 
   function collectSafeDraft() {
@@ -216,18 +228,29 @@ window.App = (() => {
   async function saveReport() {
     try {
       const report = collectForm();
+      const ok = await confirmDialog({ title: state.editingId ? 'حفظ التعديل' : 'حفظ التقرير', message: 'هل تريد حفظ التقرير في قاعدة البيانات؟', confirmText: 'حفظ', cancelText: 'مراجعة' });
+      if (!ok) return;
       const id = await window.FirebaseService.saveReport(report, state.user, state.editingId);
       state.currentId = id;
       closeModal();
+      toast('تم حفظ التقرير بنجاح', 'ok');
     } catch (error) {
-      alert('تعذر حفظ التقرير في Firestore. راجع إعداد Firebase والصلاحيات.');
+      toast('تعذر حفظ التقرير في Firestore', 'warn');
       console.error(error);
     }
   }
 
   async function deleteReport(id) {
-    if (!confirm('هل تريد حذف التقرير نهائيًا؟')) return;
-    await window.FirebaseService.deleteReport(id, state.user);
+    const ok = await confirmDialog({ title: 'حذف التقرير', message: 'سيتم حذف التقرير نهائيًا من قاعدة البيانات. هل أنت متأكد؟', confirmText: 'حذف نهائي', cancelText: 'إلغاء', danger: true });
+    if (!ok) return;
+    try {
+      await window.FirebaseService.deleteReport(id, state.user);
+      state.currentId = null;
+      toast('تم حذف التقرير', 'ok');
+    } catch (error) {
+      toast('تعذر حذف التقرير', 'warn');
+      console.error(error);
+    }
   }
 
   async function copyWhatsApp(id) {
@@ -235,6 +258,7 @@ window.App = (() => {
     if (!report) return;
     const text = window.ReportUtils.whatsappText(report);
     await navigator.clipboard.writeText(text);
+    toast('تم نسخ نص التقرير وفتح واتساب', 'ok');
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   }
@@ -245,6 +269,7 @@ window.App = (() => {
     const w = window.open('', '_blank');
     w.document.write(`<html lang="ar" dir="rtl"><head><title>${report.title}</title><style>body{font-family:Tahoma,Arial;direction:rtl;padding:32px;line-height:1.9}pre{white-space:pre-wrap;font-size:15px}.footer{margin-top:30px;color:#666;border-top:1px solid #ddd;padding-top:10px}</style></head><body><pre>${window.AppUI.esc(window.ReportUtils.whatsappText(report))}</pre><div class="footer">تم توليد التقرير: ${new Date().toLocaleString('ar')}</div><script>print()<\/script></body></html>`);
     w.document.close();
+    toast('تم تجهيز ملف PDF للطباعة', 'ok');
   }
 
   function workbookForReports(reports) {
@@ -265,15 +290,17 @@ window.App = (() => {
     const report = state.reports.find(item => item.id === id);
     if (!report) return;
     XLSX.writeFile(workbookForReports([report]), `${report.title}.xlsx`);
+    toast('تم تصدير التقرير إلى Excel', 'ok');
   }
 
   function exportAllExcel() {
     XLSX.writeFile(workbookForReports(state.reports), 'تقارير تشغيل وضخ المياه.xlsx');
+    toast('تم تصدير جميع التقارير إلى Excel', 'ok');
   }
 
   function openSummary() {
     const s = window.ReportUtils.summary(state.reports);
-    alert(`ملخص التقارير\nساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`);
+    confirmDialog({ title: 'ملخص التقارير', message: `ساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`, confirmText: 'تم', cancelText: 'إغلاق' });
   }
 
   return { start, login, logout, render, select, openNew, openEdit, closeModal, togglePaste, parseText, addBeneficiary, removeBeneficiary, saveReport, deleteReport, copyWhatsApp, exportPdf, exportOneExcel, exportAllExcel, openSummary };
