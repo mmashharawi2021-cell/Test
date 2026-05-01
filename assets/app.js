@@ -1,5 +1,33 @@
 window.App = (() => {
-  const state = { reports: [], currentId: null, user: null, unsubscribe: null, editingId: null, draft: null };
+  const DEFAULT_SETTINGS = {
+    defaultStationName: window.WATER_APP_SETTINGS?.defaultStationName || 'المحطة الرئيسية',
+    defaultWellName: window.WATER_APP_SETTINGS?.defaultWellName || 'بئر رئيسي',
+    defaultOperatorName: '',
+    defaultGeneratorStatus: 'يعمل',
+    submersibleRate: 55,
+    filteredRate: 33,
+    rejectRate: 22,
+    freeChlorine: 0.4,
+    beneficiaries: [
+      'اطباء بلا حدود - فرنسا',
+      'اطباء بلا حدود - هولندا',
+      'مؤسسة سمير',
+      'مصلحة مياه بلديات الساحل',
+      'بلدية بيت لاهيا',
+      'مياه خارجية / صنابير للمواطنين خارج المحطة'
+    ]
+  };
+  const SETTINGS_KEY = 'waterAppDefaultSettings';
+  const state = { reports: [], currentId: null, user: null, unsubscribe: null, editingId: null, draft: null, settings: loadLocalSettings() };
+
+  function loadLocalSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      return { ...DEFAULT_SETTINGS, ...saved, beneficiaries: Array.isArray(saved.beneficiaries) ? saved.beneficiaries : DEFAULT_SETTINGS.beneficiaries };
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
 
   function setHtml(html) {
     document.getElementById('app').innerHTML = html;
@@ -7,7 +35,7 @@ window.App = (() => {
   }
 
   function render() {
-    setHtml(window.AppUI.layout(state));
+    setHtml(window.AppUI.layout(state, state.settings));
   }
 
   function toast(message, type = 'ok') {
@@ -42,13 +70,53 @@ window.App = (() => {
     });
   }
 
+  function applyDefaults(report) {
+    const r = window.ReportUtils.recalc(report || window.ReportUtils.emptyReport());
+    r.stationName = r.stationName || state.settings.defaultStationName;
+    r.wellName = r.wellName || state.settings.defaultWellName;
+    r.operatorName = r.operatorName || state.settings.defaultOperatorName;
+    r.generator.status = r.generator.status || state.settings.defaultGeneratorStatus;
+    r.generator.operatorName = r.generator.operatorName || state.settings.defaultOperatorName;
+    r.water.submersibleRate = r.water.submersibleRate || state.settings.submersibleRate;
+    r.water.filteredRate = r.water.filteredRate || state.settings.filteredRate;
+    r.tests.freeChlorine = r.tests.freeChlorine || state.settings.freeChlorine;
+    return window.ReportUtils.recalc(r);
+  }
+
+  function reportWithTemplateBeneficiaries(report, keepExisting = true) {
+    const r = window.ReportUtils.recalc(report || window.ReportUtils.emptyReport());
+    const existing = Array.isArray(r.beneficiaries) ? r.beneficiaries : [];
+    const byName = new Map(existing.map(item => [String(item.name || '').trim(), item]));
+    const templates = state.settings.beneficiaries || [];
+    const templateRows = templates.map((name, index) => {
+      const old = byName.get(String(name).trim());
+      return old || { id: `tpl-${Date.now()}-${index}`, name, quantity: '', cars: '', notes: '' };
+    });
+    const extras = keepExisting ? existing.filter(item => item.name && !templates.includes(item.name)) : [];
+    r.beneficiaries = [...templateRows, ...extras];
+    return window.ReportUtils.recalc(r);
+  }
+
+  async function loadRemoteSettings(user) {
+    try {
+      if (!user || !window.firebase?.firestore) return;
+      const snap = await firebase.firestore().collection('settings').doc('main').get();
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      state.settings = { ...state.settings, ...data, beneficiaries: Array.isArray(data.beneficiaries) ? data.beneficiaries : state.settings.beneficiaries };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    } catch (error) {
+      console.warn('Could not load remote settings', error);
+    }
+  }
+
   function start() {
     if (!window.FirebaseService.isConfigured) {
       setHtml(window.AppUI.login(false));
       return;
     }
     setHtml(window.AppUI.skeleton());
-    window.FirebaseService.onAuth(user => {
+    window.FirebaseService.onAuth(async user => {
       state.user = user;
       if (!user) {
         if (state.unsubscribe) state.unsubscribe();
@@ -57,6 +125,7 @@ window.App = (() => {
         return;
       }
       window.ThemeManager?.loadUserTheme(user);
+      await loadRemoteSettings(user);
       window.FirebaseService.seedSettings().catch(console.warn);
       if (state.unsubscribe) state.unsubscribe();
       state.unsubscribe = window.FirebaseService.listenReports(reports => {
@@ -91,15 +160,34 @@ window.App = (() => {
   function select(id) {
     state.currentId = id;
     render();
-    requestAnimationFrame(() => {
-      document.getElementById('reportDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    requestAnimationFrame(() => document.getElementById('reportDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
   function openNew() {
     state.editingId = null;
-    state.draft = window.ReportUtils.emptyReport();
+    state.draft = reportWithTemplateBeneficiaries(applyDefaults(window.ReportUtils.emptyReport()), true);
     openModalWithDraft();
+  }
+
+  async function duplicateLastReport() {
+    const source = state.reports?.[0];
+    if (!source) {
+      toast('لا يوجد تقرير سابق لتكراره', 'warn');
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const copy = structuredClone(source);
+    delete copy.id;
+    delete copy.createdAt;
+    delete copy.updatedAt;
+    copy.reportDate = today;
+    copy.title = `تقرير تشغيل وضخ المياه ${window.ReportUtils.displayDate(today)}`;
+    copy.sourceText = '';
+    copy.warnings = [];
+    state.editingId = null;
+    state.draft = applyDefaults(copy);
+    openModalWithDraft();
+    toast('تم تجهيز نسخة من آخر تقرير بتاريخ اليوم', 'ok');
   }
 
   function openEdit(id) {
@@ -115,7 +203,7 @@ window.App = (() => {
     const modal = document.getElementById('reportModal');
     const host = document.getElementById('formHost');
     if (!modal || !host) return;
-    host.innerHTML = window.AppUI.reportForm(state.draft);
+    host.innerHTML = window.AppUI.reportForm(state.draft, state.settings);
     modal.classList.add('open');
     bindTabs();
   }
@@ -140,12 +228,12 @@ window.App = (() => {
         return;
       }
       const parsed = window.ReportParser.parse(text);
-      state.draft = window.ReportUtils.fromParsed(parsed);
+      state.draft = applyDefaults(window.ReportUtils.fromParsed(parsed));
       const warnings = state.draft.warnings?.length
         ? `<div class="notice warn"><strong>تنبيهات التحليل:</strong>${state.draft.warnings.map(w => `<p>${window.AppUI.esc(w)}</p>`).join('')}</div>`
         : '';
       const info = `<div class="notice ok"><p>تم تحليل النص وملء الحقول.</p><p>التاريخ: ${window.ReportUtils.displayDate(state.draft.reportDate)} | الجهات: ${(state.draft.beneficiaries || []).length} | المياه: ${state.draft.water.filledWater || 0} كوب | السيارات: ${state.draft.water.carsCount || 0}</p></div>`;
-      host.innerHTML = info + warnings + window.AppUI.reportForm(state.draft);
+      host.innerHTML = info + warnings + window.AppUI.reportForm(state.draft, state.settings);
       bindTabs();
       document.querySelector('[data-tab="general"]')?.click();
       host.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -195,7 +283,7 @@ window.App = (() => {
       generalNotes: data.get('generalNotes'),
       generator: { periods: [{ startTime: data.get('generatorStart'), stopTime: data.get('generatorEnd'), runHours: data.get('totalRunHours') }], totalRunHours: data.get('totalRunHours'), status: data.get('generatorStatus'), operatorName: data.get('generatorOperator'), notes: data.get('generatorNotes'), extraFields: [] },
       fuel: { addedDaily: data.get('fuelAdded'), consumedDaily: data.get('fuelConsumed'), municipalSupplied: data.get('fuelMunicipal'), previousBalance: data.get('fuelPrevious'), currentBalance: data.get('fuelCurrent'), loss: data.get('fuelLoss'), notes: data.get('fuelNotes'), extraFields: [] },
-      water: { dailyProduction: data.get('dailyProduction'), rejectWater: data.get('rejectWater'), lossPercentage: data.get('lossPercentage'), filledWater: data.get('filledWater'), carsCount: data.get('carsCount'), averagePerCar: data.get('averagePerCar'), notes: data.get('waterNotes') },
+      water: { submersibleRate: data.get('submersibleRate'), filteredRate: data.get('filteredRate'), dailyProduction: data.get('dailyProduction'), rejectWater: data.get('rejectWater'), lossPercentage: data.get('lossPercentage'), filledWater: data.get('filledWater'), carsCount: data.get('carsCount'), averagePerCar: data.get('averagePerCar'), notes: data.get('waterNotes') },
       tests: { phAfterDesalination: data.get('phAfter'), phWellWater: data.get('phWell'), tdsDesalinated: data.get('tdsFiltered'), tdsWell: data.get('tdsWell'), tdsReject: data.get('tdsReject'), freeChlorine: data.get('freeChlorine'), extraFields: [] },
       beneficiaries
     };
@@ -205,9 +293,27 @@ window.App = (() => {
   function addBeneficiary() {
     state.draft = collectSafeDraft();
     state.draft.beneficiaries.push({ id: `b-${Date.now()}`, name: '', quantity: '', cars: '', notes: '' });
-    document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
-    bindTabs();
-    document.querySelector('[data-tab="beneficiaries"]')?.click();
+    refreshForm('beneficiaries');
+  }
+
+  function addBeneficiaryTemplate(name) {
+    state.draft = collectSafeDraft();
+    if (!state.draft.beneficiaries.some(item => item.name === name)) {
+      state.draft.beneficiaries.push({ id: `tpl-${Date.now()}`, name, quantity: '', cars: '', notes: '' });
+    }
+    refreshForm('beneficiaries');
+  }
+
+  function applyBeneficiaryTemplates() {
+    state.draft = reportWithTemplateBeneficiaries(collectSafeDraft(), true);
+    refreshForm('beneficiaries');
+    toast('تمت تعبئة الجهات الافتراضية', 'ok');
+  }
+
+  function clearBeneficiaryAmounts() {
+    state.draft = collectSafeDraft();
+    state.draft.beneficiaries = state.draft.beneficiaries.map(item => ({ ...item, quantity: '', cars: '', notes: item.notes || '' }));
+    refreshForm('beneficiaries');
   }
 
   async function removeBeneficiary(index) {
@@ -215,20 +321,48 @@ window.App = (() => {
     if (!ok) return;
     state.draft = collectSafeDraft();
     state.draft.beneficiaries.splice(index, 1);
-    document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft);
-    bindTabs();
-    document.querySelector('[data-tab="beneficiaries"]')?.click();
+    refreshForm('beneficiaries');
     toast('تم حذف الجهة من النموذج', 'ok');
+  }
+
+  function refreshForm(tab = 'general') {
+    document.getElementById('formHost').innerHTML = window.AppUI.reportForm(state.draft, state.settings);
+    bindTabs();
+    document.querySelector(`[data-tab="${tab}"]`)?.click();
   }
 
   function collectSafeDraft() {
     try { return collectForm(); } catch { return state.draft || window.ReportUtils.emptyReport(); }
   }
 
+  function buildSmartWarnings(report) {
+    const r = window.ReportUtils.recalc(report);
+    const warnings = new Set(r.warnings || []);
+    const sameDate = state.reports.find(item => item.reportDate === r.reportDate && item.id !== state.editingId);
+    if (sameDate) warnings.add('يوجد تقرير محفوظ بنفس التاريخ. تأكد أنك لا تكرر نفس اليوم.');
+    const start = r.generator?.periods?.[0]?.startTime;
+    const stop = r.generator?.periods?.[0]?.stopTime;
+    if (!start || !stop) warnings.add('وقت تشغيل أو إيقاف المولد غير مكتمل.');
+    if (!r.fuel?.consumedDaily) warnings.add('قيمة الوقود المستهلك فارغة.');
+    if (!r.beneficiaries?.length) warnings.add('لا توجد جهات مستفيدة داخل التقرير.');
+    if (r.beneficiaries?.some(item => item.name && (!item.quantity || !item.cars))) warnings.add('بعض الجهات لديها اسم بدون كمية أو عدد سيارات.');
+    const calculatedFilled = r.beneficiaries.reduce((sum, item) => sum + window.ReportUtils.number(item.quantity), 0);
+    if (calculatedFilled !== window.ReportUtils.number(r.water.filledWater)) warnings.add('إجمالي المياه المحسوب من الجهات لا يطابق حقل المياه المعبأة.');
+    const prev = window.ReportUtils.number(r.fuel.previousBalance);
+    const added = window.ReportUtils.number(r.fuel.addedDaily) + window.ReportUtils.number(r.fuel.municipalSupplied);
+    const consumed = window.ReportUtils.number(r.fuel.consumedDaily);
+    const current = window.ReportUtils.number(r.fuel.currentBalance);
+    if ((prev || added || consumed || current) && current && Math.abs((prev + added - consumed) - current) > 1) warnings.add('رصيد الوقود الحالي لا يطابق معادلة الرصيد السابق + المضاف - المستهلك.');
+    return [...warnings];
+  }
+
   async function saveReport() {
     try {
-      const report = collectForm();
-      const ok = await confirmDialog({ title: state.editingId ? 'حفظ التعديل' : 'حفظ التقرير', message: 'هل تريد حفظ التقرير في قاعدة البيانات؟', confirmText: 'حفظ', cancelText: 'مراجعة' });
+      let report = collectForm();
+      const smartWarnings = buildSmartWarnings(report);
+      report.warnings = [...new Set([...(report.warnings || []), ...smartWarnings])];
+      const message = smartWarnings.length ? `تم اكتشاف التنبيهات التالية قبل الحفظ:\n\n- ${smartWarnings.join('\n- ')}\n\nهل تريد الحفظ رغم ذلك؟` : 'هل تريد حفظ التقرير في قاعدة البيانات؟';
+      const ok = await confirmDialog({ title: smartWarnings.length ? 'تنبيه ذكي قبل الحفظ' : (state.editingId ? 'حفظ التعديل' : 'حفظ التقرير'), message, confirmText: smartWarnings.length ? 'حفظ رغم التنبيهات' : 'حفظ', cancelText: 'مراجعة', danger: smartWarnings.length > 0 });
       if (!ok) return;
       const id = await window.FirebaseService.saveReport(report, state.user, state.editingId);
       state.currentId = id;
@@ -259,8 +393,7 @@ window.App = (() => {
     const text = window.ReportUtils.whatsappText(report);
     await navigator.clipboard.writeText(text);
     toast('تم نسخ نص التقرير وفتح واتساب', 'ok');
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
 
   function exportPdf(id) {
@@ -277,7 +410,7 @@ window.App = (() => {
     const general = reports.map(r => ({ 'التاريخ': r.reportDate, 'العنوان': r.title, 'المحطة': r.stationName, 'البئر': r.wellName, 'المشغل': r.operatorName }));
     const generator = reports.map(r => ({ 'التاريخ': r.reportDate, 'البداية': r.generator?.periods?.[0]?.startTime, 'الإيقاف': r.generator?.periods?.[0]?.stopTime, 'الساعات': r.generator?.totalRunHours, 'الحالة': r.generator?.status }));
     const fuel = reports.map(r => ({ 'التاريخ': r.reportDate, 'مضاف': r.fuel?.addedDaily, 'مستهلك': r.fuel?.consumedDaily, 'مورد من البلدية': r.fuel?.municipalSupplied, 'رصيد سابق': r.fuel?.previousBalance, 'رصيد حالي': r.fuel?.currentBalance, 'فاقد': r.fuel?.loss }));
-    const water = reports.map(r => ({ 'التاريخ': r.reportDate, 'الإنتاج': r.water?.dailyProduction, 'العادم': r.water?.rejectWater, 'نسبة الفاقد': r.water?.lossPercentage, 'المعبأ': r.water?.filledWater, 'السيارات': r.water?.carsCount, 'متوسط السيارة': r.water?.averagePerCar }));
+    const water = reports.map(r => ({ 'التاريخ': r.reportDate, 'إنتاج الغاطس': r.water?.submersibleRate, 'بعد الفلترة': r.water?.filteredRate, 'الإنتاج': r.water?.dailyProduction, 'العادم': r.water?.rejectWater, 'نسبة الفاقد': r.water?.lossPercentage, 'المعبأ': r.water?.filledWater, 'السيارات': r.water?.carsCount, 'متوسط السيارة': r.water?.averagePerCar }));
     const tests = reports.map(r => ({ 'التاريخ': r.reportDate, 'PH بعد التحلية': r.tests?.phAfterDesalination, 'PH الغاطس': r.tests?.phWellWater, 'TDS محلاة': r.tests?.tdsDesalinated, 'TDS بئر': r.tests?.tdsWell, 'TDS عادم': r.tests?.tdsReject, 'الكلور الحر': r.tests?.freeChlorine }));
     const beneficiaries = reports.flatMap(r => (r.beneficiaries || []).map(b => ({ 'التاريخ': r.reportDate, 'الجهة': b.name, 'الكمية': b.quantity, 'السيارات': b.cars, 'ملاحظات': b.notes })));
     const s = window.ReportUtils.summary(reports);
@@ -303,7 +436,54 @@ window.App = (() => {
     confirmDialog({ title: 'ملخص التقارير', message: `ساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`, confirmText: 'تم', cancelText: 'إغلاق' });
   }
 
-  return { start, login, logout, render, select, openNew, openEdit, closeModal, togglePaste, parseText, addBeneficiary, removeBeneficiary, saveReport, deleteReport, copyWhatsApp, exportPdf, exportOneExcel, exportAllExcel, openSummary };
+  function goHome() { document.getElementById('top')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function goReports() { document.getElementById('reports')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+  function openSettings() {
+    render();
+    document.getElementById('settingsModal')?.classList.add('open');
+  }
+  function closeSettings() { document.getElementById('settingsModal')?.classList.remove('open'); }
+
+  async function saveSettings() {
+    const form = document.getElementById('settingsForm');
+    const data = new FormData(form);
+    const next = {
+      defaultStationName: data.get('defaultStationName') || DEFAULT_SETTINGS.defaultStationName,
+      defaultWellName: data.get('defaultWellName') || DEFAULT_SETTINGS.defaultWellName,
+      defaultOperatorName: data.get('defaultOperatorName') || '',
+      defaultGeneratorStatus: data.get('defaultGeneratorStatus') || 'يعمل',
+      submersibleRate: data.get('submersibleRate') || '',
+      filteredRate: data.get('filteredRate') || '',
+      rejectRate: data.get('rejectRate') || '',
+      freeChlorine: data.get('freeChlorine') || '',
+      beneficiaries: String(data.get('beneficiaries') || '').split('\n').map(x => x.trim()).filter(Boolean)
+    };
+    state.settings = { ...DEFAULT_SETTINGS, ...next };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    try {
+      if (window.firebase?.firestore && state.user) {
+        await firebase.firestore().collection('settings').doc('main').set({ ...state.settings, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      }
+      toast('تم حفظ الإعدادات الافتراضية', 'ok');
+    } catch (error) {
+      toast('تم الحفظ محليًا فقط، تعذر حفظ Firestore', 'warn');
+    }
+    closeSettings();
+    render();
+  }
+
+  async function resetSettings() {
+    const ok = await confirmDialog({ title: 'استرجاع الإعدادات', message: 'سيتم استرجاع القيم الافتراضية للجهات والحقول.', confirmText: 'استرجاع', cancelText: 'إلغاء' });
+    if (!ok) return;
+    state.settings = { ...DEFAULT_SETTINGS };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    closeSettings();
+    render();
+    toast('تم استرجاع الإعدادات الافتراضية', 'ok');
+  }
+
+  return { start, login, logout, render, select, openNew, duplicateLastReport, openEdit, closeModal, togglePaste, parseText, addBeneficiary, addBeneficiaryTemplate, applyBeneficiaryTemplates, clearBeneficiaryAmounts, removeBeneficiary, saveReport, deleteReport, copyWhatsApp, exportPdf, exportOneExcel, exportAllExcel, openSummary, goHome, goReports, openSettings, closeSettings, saveSettings, resetSettings };
 })();
 
 window.addEventListener('DOMContentLoaded', () => window.App.start());
