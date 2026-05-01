@@ -16,14 +16,39 @@
     if (!dock) {
       dock = document.createElement('div');
       dock.id = 'modeSwitcher';
-      dock.className = 'mode-switcher';
+      dock.className = 'theme-switch-shell';
       dock.innerHTML = `
-        <button type="button" data-mode="dark" aria-label="الوضع المظلم" onclick="ThemeManager.saveUserTheme('dark')"><span>ليل</span></button>
-        <button type="button" data-mode="light" aria-label="وضع النهار" onclick="ThemeManager.saveUserTheme('light')"><span>نهار</span></button>
+        <button
+          id="themeToggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="تبديل الوضع"
+          aria-pressed="false"
+          title="تبديل الوضع"
+        >
+          <span class="theme-toggle-led" aria-hidden="true"></span>
+          <span class="theme-toggle-track" aria-hidden="true">
+            <span class="theme-toggle-thumb"></span>
+          </span>
+        </button>
       `;
       document.body.appendChild(dock);
+      dock.querySelector('#themeToggle')?.addEventListener('click', () => {
+        const current = window.ThemeManager?.current?.() || 'dark';
+        const next = current === 'light' ? 'dark' : 'light';
+        window.ThemeManager?.saveUserTheme?.(next);
+      });
     }
     return dock;
+  }
+
+  function syncSwitcher(selected) {
+    const dock = ensureModeSwitcher();
+    const toggle = dock?.querySelector('#themeToggle');
+    if (!toggle) return;
+    const isLight = selected === 'light';
+    toggle.setAttribute('aria-pressed', String(isLight));
+    toggle.classList.toggle('is-on', isLight);
   }
 
   function applyTheme(theme) {
@@ -35,12 +60,7 @@
       localStorage.setItem(STORAGE_KEY, selected);
       localStorage.removeItem(LEGACY_KEY);
     } catch {}
-    const dock = ensureModeSwitcher();
-    if (dock) {
-      dock.querySelectorAll('[data-mode]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === selected);
-      });
-    }
+    syncSwitcher(selected);
   }
 
   function getInitialTheme() {
