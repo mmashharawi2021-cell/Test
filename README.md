@@ -1,110 +1,356 @@
-# Geo Canvas
+# نظام تقارير تشغيل وضخ المياه
 
-A luxurious web application for creating and displaying interactive map interfaces, inspired by Esri's mapping experiences.
+منصة ويب عربية رسمية لإدارة تقارير تشغيل وضخ المياه اليومية الخاصة بالمستخدم **صالح الدحنون**.  
+النظام مصمم لتسهيل إدخال تقارير التشغيل اليومية، تنظيمها، أرشفتها، مراجعتها، وتصديرها بصيغ مناسبة للعمل الرسمي.
 
-This project uses React, TypeScript, Vite, and Leaflet with advanced plugins for a comprehensive mapping tool.
+## رابط الموقع
 
-## Features
+**رابط التجربة المباشر:**  
+https://mmashharawi2021-cell.github.io/Test/?v=20260501-23
 
-- **Interactive Map**: Pan, zoom, and explore maps worldwide
-- **Multiple Basemaps**: Switch between OpenStreetMap, Satellite, Streets, and Terrain views
-- **Drawing Tools**: Add markers, lines, polygons, and shapes directly on the map
-- **Geocoding Search**: Search for locations and navigate to them
-- **Geolocation**: Find your current location on the map
-- **Layer Management**: Add and manage multiple data layers
-- **Data Import**: Upload GeoJSON files or shapefiles (.zip) to display custom data
-- **Esri Integration**: Add Esri feature layers by URL for professional GIS data
-- **Responsive Design**: Works on desktop and mobile devices
-- **Admin Canvas**: Designed for administrators to build map interfaces and share links
+> ملاحظة: إذا لم تظهر آخر التحديثات مباشرة، افتح الرابط في تبويب خفي أو أعد تحميل الصفحة أكثر من مرة بسبب كاش المتصفح.
 
-## Technologies Used
+---
 
-- [React](https://react.dev/) - UI library
-- [TypeScript](https://www.typescriptlang.org/) - Type safety
-- [Vite](https://vite.dev/) - Build tool
-- [Leaflet](https://leafletjs.com/) - Core mapping library
-- [React Leaflet](https://react-leaflet.js.org/) - React integration
-- [Leaflet Draw](https://leaflet.github.io/Leaflet.draw/) - Drawing tools
-- [Leaflet Control Geocoder](https://github.com/perliedman/leaflet-control-geocoder) - Search functionality
-- [Esri Leaflet](https://esri.github.io/esri-leaflet/) - Esri service integration
-- [Leaflet Providers](https://leaflet-extras.github.io/leaflet-providers/) - Additional basemaps
-- [shpjs](https://github.com/calvinmetcalf/shp.js/) - Shapefile parsing
+## فكرة النظام
 
-## Getting Started
+النظام مخصص لتسجيل وإدارة تقارير يومية تشمل:
 
-### Prerequisites
+- تشغيل المولد.
+- ساعات التشغيل والإيقاف.
+- استهلاك الوقود.
+- كميات ضخ المياه.
+- فحوصات جودة المياه.
+- الجهات المستفيدة وكميات التعبئة.
+- أرشفة التقارير على شكل كروت.
+- تصدير التقارير ومشاركتها عبر واتساب.
 
-- Node.js (version 18 or higher)
-- npm
+الهدف الأساسي هو تحويل التقرير اليومي المكتوب بصيغة واتساب إلى تقرير منظم داخل نظام رسمي قابل للحفظ والمراجعة والتصدير.
 
-### Installation
+---
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## بيانات الدخول
 
-### Running the Application
+النظام يستخدم طبقة دخول بسيطة مرتبطة بإعدادات المشروع.
 
-Start the development server:
+- **اسم المستخدم:** صالح الدحنون
+- **كلمة المرور:** صالح الدحنون
 
-```bash
-npm run dev
+> يعتمد النظام على Firebase Authentication بطريقة Anonymous Auth بعد التحقق من الاسم وكلمة المرور داخل الواجهة.
+
+---
+
+## أهم الخصائص
+
+### 1. إضافة تقرير جديد
+
+عند الضغط على زر **إضافة تقرير جديد** يظهر نموذج إدخال منظم يحتوي على تبويبات:
+
+- بيانات عامة.
+- تشغيل المولد.
+- الوقود.
+- كميات المياه.
+- فحوصات المياه.
+- الجهات المستفيدة.
+- المعاينة.
+
+يوجد أيضًا خيار **تعبئة تلقائية من نص التقرير**، حيث يمكن لصق تقرير واتساب كامل ليقوم النظام بتحليله وملء الحقول تلقائيًا.
+
+---
+
+### 2. التعبئة التلقائية من تقرير واتساب
+
+يدعم النظام لصق تقارير مشابهة للصيغة التالية:
+
+```text
+تقرير تشغيل وضخ المياه 30/04/2026
+ساعة تشغيل المولد: 06:25 صباحاً
+ساعة الإيقاف: 15:25 مساءً
+ساعات التشغيل: 9:00 ساعات
+إجمالي الوقود المستهلك يومياً 171 لتر
+PH بعد التحلية: 6
+TDS مياه محلاة: 92
+...
 ```
 
-Open [http://localhost:5176](http://localhost:5176) in your browser to view the application.
+يقوم النظام باستخراج البيانات التالية قدر الإمكان:
 
-### Building for Production
+- تاريخ التقرير.
+- وقت تشغيل المولد.
+- وقت الإيقاف.
+- عدد ساعات التشغيل.
+- الوقود المضاف والمستهلك والمورد من البلدية.
+- الرصيد الحالي للوقود.
+- إنتاج المياه.
+- كمية العادم.
+- فحوصات المياه.
+- الجهات المستفيدة.
+- كمية كل جهة وعدد السيارات.
 
-```bash
-npm run build
+---
+
+### 3. قوالب جاهزة للجهات المستفيدة
+
+تمت إضافة قوالب جاهزة لتسريع إدخال الجهات المتكررة يوميًا، مثل:
+
+- أطباء بلا حدود - فرنسا.
+- أطباء بلا حدود - هولندا.
+- مؤسسة سمير.
+- مصلحة مياه بلديات الساحل.
+- بلدية بيت لاهيا.
+- مياه خارجية / صنابير للمواطنين خارج المحطة.
+
+داخل تبويب **الجهات المستفيدة** يمكن استخدام زر **تعبئة الجهات الافتراضية** لإضافة هذه الجهات مباشرة، ثم إدخال الكمية وعدد السيارات فقط.
+
+---
+
+### 4. تكرار آخر تقرير
+
+يوجد زر **تكرار آخر تقرير** في الواجهة الرئيسية.
+
+وظيفته:
+
+- أخذ آخر تقرير محفوظ.
+- نسخه كتقرير جديد بتاريخ اليوم.
+- إبقاء القيم القابلة للتكرار.
+- السماح بتعديل الأرقام الجديدة قبل الحفظ.
+
+هذه الخاصية مفيدة لأن تقارير التشغيل اليومية غالبًا تكون متشابهة في البنية والجهات.
+
+---
+
+### 5. تنبيه ذكي قبل الحفظ
+
+قبل حفظ التقرير، يقوم النظام بفحص بعض الأخطاء المحتملة، مثل:
+
+- وجود تقرير محفوظ بنفس التاريخ.
+- نقص وقت تشغيل أو إيقاف المولد.
+- نقص قيمة الوقود المستهلك.
+- وجود جهات مستفيدة بدون كمية أو عدد سيارات.
+- عدم تطابق إجمالي المياه المحسوب من الجهات.
+- عدم تطابق رصيد الوقود الحالي مع الحساب المتوقع.
+
+إذا ظهرت تنبيهات، يعرض النظام رسالة واضحة بخلفية Blur ويسمح للمستخدم بمراجعة البيانات أو الحفظ رغم التنبيهات.
+
+---
+
+### 6. أرشيف التقارير على شكل كروت
+
+كل تقرير محفوظ يظهر ككرت في صفحة الأرشيف، ويعرض:
+
+- عنوان التقرير.
+- التاريخ.
+- المحطة.
+- ساعات التشغيل.
+- الوقود المستهلك.
+- كمية المياه المعبأة.
+- عدد السيارات.
+- حالة التقرير أو عدد التنبيهات.
+
+عند الضغط على أي كرت تظهر تفاصيل التقرير أسفل الكروت بحركة ناعمة.
+
+---
+
+### 7. تفاصيل التقرير
+
+صفحة تفاصيل التقرير تعرض:
+
+- ملخص البيانات الأساسية.
+- فحوصات المياه.
+- الجهات المستفيدة.
+- النص الرسمي للتقرير.
+- أزرار الإجراءات.
+
+الأزرار المتاحة:
+
+- تعديل التقرير.
+- إرسال واتساب.
+- تصدير PDF.
+- تصدير Excel.
+- حذف التقرير.
+
+---
+
+### 8. التصدير والمشاركة
+
+يدعم النظام:
+
+#### تصدير PDF
+
+يفتح نسخة قابلة للطباعة بصيغة تقرير عربي رسمي.
+
+#### تصدير Excel
+
+يصدر التقرير أو جميع التقارير إلى ملف Excel يحتوي على أوراق منظمة، مثل:
+
+- General.
+- Generator.
+- Fuel.
+- Water Quantities.
+- Water Tests.
+- Beneficiaries.
+- Summary.
+
+#### واتساب
+
+يقوم النظام بنسخ نص التقرير وفتح واتساب بصيغة جاهزة للإرسال.
+
+---
+
+## لوحة الإحصائيات
+
+في أعلى الموقع توجد كروت إحصائية تعرض إجمالي البيانات داخل التقارير، مثل:
+
+- عدد التقارير.
+- إجمالي ساعات التشغيل.
+- إجمالي الوقود المستهلك.
+- إجمالي المياه المعبأة.
+- إجمالي الإنتاج.
+- إجمالي العادم.
+- إجمالي عدد السيارات.
+- نسبة الفاقد.
+
+تم تحسين شكل هذه الكروت لتظهر بشكل رسمي وجمالي مع أيقونات وتأثيرات زجاجية.
+
+---
+
+## صفحة الإعدادات
+
+تمت إضافة صفحة إعدادات بسيطة تسمح بتحديد القيم الافتراضية، مثل:
+
+- اسم المحطة الافتراضي.
+- اسم البئر الافتراضي.
+- اسم المشغل الافتراضي.
+- حالة المولد الافتراضية.
+- إنتاج الغاطس كوب/ساعة.
+- كمية المياه بعد الفلترة كوب/ساعة.
+- العادم الافتراضي.
+- الكلور الحر الافتراضي.
+- قوالب الجهات المستفيدة.
+
+يتم حفظ الإعدادات محليًا، ومحاولة حفظها أيضًا في Firestore عند توفر الاتصال والصلاحيات.
+
+---
+
+## واجهة الجوال
+
+تم تحسين عرض الجوال ليبدو أقرب إلى تطبيق موبايل، ويحتوي على شريط سفلي:
+
+- الرئيسية.
+- التقارير.
+- إضافة.
+- الإحصائيات.
+- الإعدادات.
+
+هذا يسهل الاستخدام من الهاتف، خصوصًا أثناء إدخال التقارير اليومية.
+
+---
+
+## التصميم
+
+يعتمد التصميم على:
+
+- واجهة عربية RTL.
+- تأثير Glassmorphism رسمي.
+- وضع مظلم ووضع نهاري.
+- خلفيات ناعمة مستوحاة من الزجاج والتدرجات الهادئة.
+- كروت شفافة بزوايا دائرية.
+- أزرار تفاعلية بارزة.
+- رسائل تأكيد بخلفية Blur.
+- حركة ناعمة عند فتح تفاصيل التقرير.
+- تنبيهات نابضة باللون الأحمر عند وجود مشاكل داخل التقرير.
+
+---
+
+## الوضع المظلم والنهاري
+
+يوجد زر تبديل بين:
+
+- وضع مظلم.
+- وضع نهاري.
+
+الزر مصمم على شكل Toggle Switch زجاجي/نيومورفيك مع دائرة منزلقة ولمبة صغيرة، ويتم حفظ الوضع المختار للمستخدم.
+
+---
+
+## التخزين وقاعدة البيانات
+
+يعتمد النظام على Firebase، خصوصًا:
+
+- Firebase Firestore لحفظ التقارير.
+- Firebase Authentication للدخول.
+- Collections مستخدمة:
+  - `reports`
+  - `settings`
+  - `stations`
+  - `activityLogs`
+  - `userPreferences`
+
+---
+
+## قواعد Firestore المقترحة
+
+```js
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 ```
 
-### Linting
+---
 
-```bash
-npm run lint
+## الملفات الرئيسية
+
+```text
+index.html
+assets/
+  app.js
+  ui.js
+  parser.js
+  report-utils.js
+  firebase-config.js
+  firebase-service.js
+  theme-switcher.js
+  styles.css
+  theme-polish.css
+  final-ui.css
+  day-night-theme.css
+  product-features.css
 ```
 
-## Usage
+### شرح مختصر للملفات
 
-1. **Navigate the Map**: Use mouse to pan and zoom
-2. **Switch Basemaps**: Use the layers control in the top-right
-3. **Search Locations**: Use the search box in the top-left
-4. **Draw Shapes**: Use the drawing tools in the top-left to add markers, lines, etc.
-5. **Upload Data**: Use the sidebar to upload GeoJSON or shapefiles
-6. **Add Esri Layers**: Enter an Esri feature service URL and click "Add Layer"
-7. **Geolocate**: Click the "📍 Locate Me" button to find your position
+- `app.js`: منطق التطبيق، الحفظ، الحذف، التكرار، التنبيهات، الإعدادات.
+- `ui.js`: بناء واجهة المستخدم والكروت والنماذج والمودالات.
+- `parser.js`: تحليل نص تقرير واتساب وتحويله إلى بيانات منظمة.
+- `report-utils.js`: الحسابات، إعادة احتساب البيانات، ملخصات التقارير، نص واتساب.
+- `firebase-service.js`: الاتصال بـ Firebase وFirestore.
+- `theme-switcher.js`: تبديل الوضع النهاري/المظلم وحفظه.
+- `day-night-theme.css`: ألوان وتأثيرات الوضعين.
+- `product-features.css`: تحسينات القوالب، الإعدادات، Bottom Navigation، وكروت الإحصائيات.
 
-## Data Sources
+---
 
-- **GeoJSON**: Standard format for geographic data
-- **Shapefiles**: Compressed .zip files containing shapefile data
-- **Esri Services**: URLs to ArcGIS feature services (e.g., from ArcGIS Online or Enterprise)
-  import reactDom from 'eslint-plugin-react-dom'
+## طريقة الاستخدام المختصرة
 
-export default defineConfig([
-globalIgnores(['dist']),
-{
-files: ['**/*.{ts,tsx}'],
-extends: [
-// Other configs...
-// Enable lint rules for React
-reactX.configs['recommended-typescript'],
-// Enable lint rules for React DOM
-reactDom.configs.recommended,
-],
-languageOptions: {
-parserOptions: {
-project: ['./tsconfig.node.json', './tsconfig.app.json'],
-tsconfigRootDir: import.meta.dirname,
-},
-// other options...
-},
-},
-])
+1. افتح الموقع.
+2. سجل الدخول باسم المستخدم وكلمة المرور.
+3. افتح الإعدادات واضبط القيم الافتراضية.
+4. اضغط إضافة تقرير جديد.
+5. الصق تقرير واتساب أو أدخل البيانات يدويًا.
+6. استخدم قوالب الجهات المستفيدة لتسريع الإدخال.
+7. راجع التنبيهات الذكية قبل الحفظ.
+8. احفظ التقرير.
+9. استخدم الأرشيف لعرض التقرير أو تعديله أو تصديره.
 
-```
+---
 
-```
+## حالة المشروع
+
+المشروع حاليًا نسخة تشغيلية قابلة للتجربة والنشر على GitHub Pages أو Firebase Hosting.  
+ما زال قابلًا للتطوير بإضافة صلاحيات مستخدمين متعددة، تقارير شهرية أكثر تفصيلًا، وتحسينات PDF احترافية لاحقًا.
