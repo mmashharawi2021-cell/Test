@@ -1,0 +1,182 @@
+/* Compact dashboard/report cards layout */
+.dashboard-totals {
+  gap: 12px !important;
+  align-items: stretch !important;
+}
+
+.dashboard-totals article,
+.kpi-card,
+.kpi-wide {
+  min-height: 128px !important;
+  padding: 16px !important;
+  border-radius: 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+}
+
+.kpi-wide {
+  grid-column: span 2 !important;
+}
+
+.kpi-wide strong,
+.kpi-card strong,
+.dashboard-totals article strong {
+  font-size: clamp(24px, 3vw, 34px) !important;
+  line-height: 1.1 !important;
+  margin: 4px 0 !important;
+}
+
+.kpi-card span,
+.kpi-wide span,
+.dashboard-totals article span {
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+
+.kpi-card small,
+.kpi-wide small,
+.dashboard-totals article small {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  margin-top: 2px !important;
+}
+
+.kpi-icon {
+  position: absolute !important;
+  top: 12px !important;
+  left: 12px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 13px !important;
+  font-size: 17px !important;
+  margin: 0 !important;
+  opacity: .9 !important;
+}
+
+.kpi-head {
+  margin-bottom: 4px !important;
+}
+
+.kpi-head b {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+}
+
+.cards-section {
+  padding: 16px !important;
+}
+
+.reports-grid {
+  gap: 10px !important;
+}
+
+.report-card {
+  min-height: 118px !important;
+  padding: 14px !important;
+  border-radius: 22px !important;
+}
+
+.report-card strong {
+  font-size: clamp(17px, 2vw, 23px) !important;
+  line-height: 1.45 !important;
+  margin: 6px 0 !important;
+}
+
+.report-card small,
+.report-card em {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.card-badge {
+  padding: 3px 7px !important;
+  font-size: 11px !important;
+}
+
+@media (min-width: 960px) {
+  .dashboard-totals {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .reports-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px !important;
+  }
+
+  .dashboard-totals article,
+  .kpi-card,
+  .kpi-wide {
+    min-height: 108px !important;
+    padding: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .kpi-wide {
+    grid-column: span 2 !important;
+    min-height: 96px !important;
+  }
+
+  .kpi-wide strong,
+  .kpi-card strong,
+  .dashboard-totals article strong {
+    font-size: 24px !important;
+  }
+
+  .kpi-card span,
+  .kpi-wide span,
+  .dashboard-totals article span {
+    font-size: 12.5px !important;
+  }
+
+  .kpi-card small,
+  .kpi-wide small,
+  .dashboard-totals article small {
+    font-size: 11px !important;
+  }
+
+  .kpi-icon {
+    top: 10px !important;
+    left: 10px !important;
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 12px !important;
+    font-size: 15px !important;
+  }
+
+  .cards-section {
+    padding: 12px !important;
+    border-radius: 22px !important;
+  }
+
+  .section-head h2 {
+    font-size: 25px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .reports-grid {
+    gap: 8px !important;
+  }
+
+  .report-card {
+    min-height: 94px !important;
+    padding: 11px 12px !important;
+    border-radius: 18px !important;
+  }
+
+  .report-card strong {
+    font-size: 17px !important;
+    margin: 4px 0 !important;
+  }
+
+  .report-card small,
+  .report-card em {
+    font-size: 12px !important;
+  }
+}
