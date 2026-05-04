@@ -95,8 +95,13 @@
 
     r.generator.periods = periods;
     r.generator.totalRunHours = r.generator.totalRunHours || minutesToHours(totalMinutes);
-    r.water.filledWater = r.beneficiaries.reduce((sum, item) => sum + number(item.quantity), 0);
-    r.water.carsCount = r.beneficiaries.reduce((sum, item) => sum + number(item.cars), 0);
+
+    const beneficiariesFilled = r.beneficiaries.reduce((sum, item) => sum + number(item.quantity), 0);
+    const beneficiariesCars = r.beneficiaries.reduce((sum, item) => sum + number(item.cars), 0);
+    const manualFilled = number(r.water.manualFilledWater);
+
+    r.water.filledWater = manualFilled || beneficiariesFilled;
+    r.water.carsCount = beneficiariesCars;
     r.water.averagePerCar = number(r.water.carsCount) ? +(number(r.water.filledWater) / number(r.water.carsCount)).toFixed(2) : '';
 
     const runHoursDecimal = hoursToDecimal(r.generator.totalRunHours);
@@ -110,10 +115,18 @@
       r.water.lossPercentage = +((number(r.water.rejectWater) / number(r.water.dailyProduction)) * 100).toFixed(2);
     }
 
-    const warnings = Array.isArray(r.warnings) ? [...r.warnings] : [];
+    // Rebuild warnings from current data only. Do not keep old saved warnings.
+    const warnings = [];
     if (number(r.water.dailyProduction) && number(r.water.filledWater) > number(r.water.dailyProduction)) {
       warnings.push('كمية المياه المعبأة أكبر من الإنتاج اليومي المحسوب.');
     }
+    if (manualFilled && beneficiariesFilled && Math.abs(manualFilled - beneficiariesFilled) > 0.5) {
+      warnings.push('إجمالي المياه المعبأة معدّل يدويًا ولا يطابق مجموع الجهات.');
+    }
+    if (r.beneficiaries.some(item => String(item.name || '').trim() && (!number(item.quantity) || !number(item.cars)))) {
+      warnings.push('بعض الجهات لديها اسم بدون كمية أو عدد سيارات.');
+    }
+
     r.warnings = [...new Set(warnings)];
     return r;
   }
