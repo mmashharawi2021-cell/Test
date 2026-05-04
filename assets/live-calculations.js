@@ -34,9 +34,10 @@
     setTimeout(() => input.classList.remove('live-updated'), 500);
   }
 
-  function shouldAutoFill(input) {
+  function shouldAutoFill(input, force = false) {
     if (!input) return false;
-    return !input.value || input.dataset.autoCalculated === 'true' || input.readOnly;
+    if (input.dataset.autoCalculated === 'false') return false;
+    return force || !input.value || input.dataset.autoCalculated === 'true' || input.readOnly;
   }
 
   function beneficiaryTotals(form) {
@@ -48,12 +49,14 @@
     };
   }
 
-  function calculateTimeAndWater(form) {
+  function calculateTimeAndWater(form, changedName = '') {
     const start = get(form, 'generatorStart');
     const end = get(form, 'generatorEnd');
     const runHoursInput = form.querySelector('[name="totalRunHours"]');
+    const timeChanged = ['generatorStart', 'generatorEnd'].includes(changedName);
+    const waterSourceChanged = ['generatorStart', 'generatorEnd', 'totalRunHours', 'submersibleRate', 'filteredRate'].includes(changedName);
 
-    if (start && end && window.ReportUtils?.calcRunHours && shouldAutoFill(runHoursInput)) {
+    if (start && end && window.ReportUtils?.calcRunHours && shouldAutoFill(runHoursInput, timeChanged)) {
       set(form, 'totalRunHours', window.ReportUtils.calcRunHours(start, end));
     }
 
@@ -62,18 +65,19 @@
     const filteredRate = num(get(form, 'filteredRate'));
     const dailyProductionInput = form.querySelector('[name="dailyProduction"]');
     const rejectWaterInput = form.querySelector('[name="rejectWater"]');
+    const lossInput = form.querySelector('[name="lossPercentage"]');
 
-    if (runHours && filteredRate && shouldAutoFill(dailyProductionInput)) {
+    if (runHours && filteredRate && shouldAutoFill(dailyProductionInput, waterSourceChanged)) {
       set(form, 'dailyProduction', cleanNumber(filteredRate * runHours));
     }
 
-    if (runHours && submersibleRate && filteredRate && shouldAutoFill(rejectWaterInput)) {
+    if (runHours && submersibleRate && filteredRate && shouldAutoFill(rejectWaterInput, waterSourceChanged)) {
       set(form, 'rejectWater', cleanNumber((submersibleRate - filteredRate) * runHours));
     }
 
     const dailyProduction = num(get(form, 'dailyProduction'));
     const rejectWater = num(get(form, 'rejectWater'));
-    if (dailyProduction && rejectWater) {
+    if (dailyProduction && rejectWater && shouldAutoFill(lossInput, waterSourceChanged || changedName === 'dailyProduction' || changedName === 'rejectWater')) {
       set(form, 'lossPercentage', cleanNumber((rejectWater / dailyProduction) * 100));
     }
 
@@ -86,9 +90,10 @@
   function calculateFuel(form, changedName = '') {
     const runHours = hoursToDecimal(get(form, 'totalRunHours'));
     const consumedInput = form.querySelector('[name="fuelConsumed"]');
+    const fuelSourceChanged = ['generatorStart', 'generatorEnd', 'totalRunHours'].includes(changedName);
+    const fuelBalanceChanged = ['fuelPrevious', 'fuelAdded', 'fuelMunicipal', 'fuelConsumed'].includes(changedName) || fuelSourceChanged;
 
-    // استهلاك المولد = 19 لتر لكل ساعة تشغيل. يتم حسابه فورياً من ساعات التشغيل.
-    if (runHours && shouldAutoFill(consumedInput) && changedName !== 'fuelConsumed') {
+    if (runHours && shouldAutoFill(consumedInput, fuelSourceChanged) && changedName !== 'fuelConsumed') {
       set(form, 'fuelConsumed', cleanNumber(runHours * FUEL_CONSUMPTION_PER_HOUR));
     }
 
@@ -102,22 +107,21 @@
     const hasAnyFuel = previous || added || municipal || consumed || num(get(form, 'fuelCurrent'));
     if (!hasAnyFuel) return;
 
-    // المتبقي = الرصيد السابق + المضاف اليومي + المورد من البلدية - الاستهلاك اليومي
     const expectedCurrent = previous + added + municipal - consumed;
 
-    if (shouldAutoFill(currentInput) && changedName !== 'fuelCurrent') {
+    if (shouldAutoFill(currentInput, fuelBalanceChanged) && changedName !== 'fuelCurrent') {
       set(form, 'fuelCurrent', cleanNumber(expectedCurrent));
     }
 
     const current = num(get(form, 'fuelCurrent'));
-    if ((current || current === 0) && shouldAutoFill(lossInput) && changedName !== 'fuelLoss') {
+    if ((current || current === 0) && shouldAutoFill(lossInput, fuelBalanceChanged || changedName === 'fuelCurrent') && changedName !== 'fuelLoss') {
       set(form, 'fuelLoss', cleanNumber(expectedCurrent - current));
     }
   }
 
   function runAll(form, changedName = '') {
     if (!form) return;
-    calculateTimeAndWater(form);
+    calculateTimeAndWater(form, changedName);
     calculateFuel(form, changedName);
   }
 
