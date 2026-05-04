@@ -9,6 +9,24 @@
       .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
   }
 
+  function normalizeDateInput(value) {
+    const raw = normalizeArabicDigits(value).trim();
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const m = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (!m) return raw;
+    const day = String(Number(m[1])).padStart(2, '0');
+    const month = String(Number(m[2])).padStart(2, '0');
+    const year = m[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  function displayDate(date) {
+    const iso = normalizeDateInput(date);
+    const parts = String(iso || '').split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (date || '');
+  }
+
   function normalizeTimeInput(value) {
     let raw = normalizeArabicDigits(value).trim().toLowerCase();
     if (!raw) return '';
@@ -77,6 +95,7 @@
 
   function recalc(report) {
     const r = structuredClone(report || original.emptyReport());
+    r.reportDate = normalizeDateInput(r.reportDate || '');
     r.generator = r.generator || { periods: [] };
     r.fuel = r.fuel || {};
     r.water = r.water || {};
@@ -88,7 +107,7 @@
     periods.forEach(period => {
       period.startTime = normalizeTimeInput(period.startTime || '');
       period.stopTime = normalizeTimeInput(period.stopTime || '');
-      if (!period.runHours) period.runHours = calcRunHours(period.startTime, period.stopTime);
+      period.runHours = period.runHours || calcRunHours(period.startTime, period.stopTime);
       const [h, m = 0] = String(period.runHours || '').split(':').map(Number);
       totalMinutes += (Number(h) || 0) * 60 + (Number(m) || 0);
     });
@@ -115,7 +134,6 @@
       r.water.lossPercentage = +((number(r.water.rejectWater) / number(r.water.dailyProduction)) * 100).toFixed(2);
     }
 
-    // Rebuild warnings from current data only. Do not keep old saved warnings.
     const warnings = [];
     if (number(r.water.dailyProduction) && number(r.water.filledWater) > number(r.water.dailyProduction)) {
       warnings.push('كمية المياه المعبأة أكبر من الإنتاج اليومي المحسوب.');
@@ -134,7 +152,7 @@
   function whatsappText(report) {
     const r = recalc(report);
     const beneficiaries = (r.beneficiaries || []).map(item => `▪️ ${item.name}\nالكمية/ ${item.quantity || 0} كوب ، عدد السيارات/ ${item.cars || 0}`).join('\n\n');
-    return `*${r.title}*\n\n📅 التاريخ: ${original.displayDate(r.reportDate)}\n📍 المحطة: ${r.stationName || '-'}\n\n⏱️ تشغيل المولد:\n▪️ البداية: ${displayTimeArabic(r.generator.periods?.[0]?.startTime) || '-'}\n▪️ الإيقاف: ${displayTimeArabic(r.generator.periods?.[0]?.stopTime) || '-'}\n▪️ ساعات التشغيل: ${r.generator.totalRunHours || '-'}\n▪️ الحالة: ${r.generator.status || '-'}\n\n⛽ الوقود:\n▪️ المضاف يومياً: ${r.fuel.addedDaily || '_'} لتر\n▪️ المستهلك يومياً: ${r.fuel.consumedDaily || '_'} لتر\n▪️ المورد من البلدية: ${r.fuel.municipalSupplied || '_'} لتر\n▪️ الرصيد السابق: ${r.fuel.previousBalance || '_'} لتر\n▪️ الرصيد الحالي: ${r.fuel.currentBalance || '_'} لتر\n▪️ الفرق/الفاقد: ${r.fuel.loss || '_'} لتر\n\n💧 كميات المياه:\n▪️ إنتاج الغاطس: ${r.water.submersibleRate || '_'} كوب/ساعة\n▪️ بعد الفلترة: ${r.water.filteredRate || '_'} كوب/ساعة\n▪️ الإنتاج اليومي: ${r.water.dailyProduction || '_'} كوب\n▪️ العادم: ${r.water.rejectWater || '_'} كوب\n▪️ نسبة الفاقد: ${r.water.lossPercentage || '_'}%\n▪️ المعبأ للجهات: ${r.water.filledWater || 0} كوب\n▪️ عدد السيارات: ${r.water.carsCount || 0}\n▪️ متوسط السيارة: ${r.water.averagePerCar || '_'} كوب\n\n🧪 فحوصات المياه:\n▪️ PH بعد التحلية: ${r.tests.phAfterDesalination || '_'}\n▪️ PH مياه الغاطس: ${r.tests.phWellWater || '_'}\n▪️ TDS مياه محلاة: ${r.tests.tdsDesalinated || '_'}\n▪️ TDS بئر: ${r.tests.tdsWell || '_'}\n▪️ TDS عادم: ${r.tests.tdsReject || '_'}\n▪️ الكلور الحر: ${r.tests.freeChlorine || '_'}\n\n🚚 الجهات المستفيدة:\n${beneficiaries || 'لا توجد جهات مدخلة'}\n\n📝 ملاحظات:\n${r.notes || r.generalNotes || '_'}`;
+    return `*${r.title}*\n\n📅 التاريخ: ${displayDate(r.reportDate)}\n📍 المحطة: ${r.stationName || '-'}\n\n⏱️ تشغيل المولد:\n▪️ البداية: ${displayTimeArabic(r.generator.periods?.[0]?.startTime) || '-'}\n▪️ الإيقاف: ${displayTimeArabic(r.generator.periods?.[0]?.stopTime) || '-'}\n▪️ ساعات التشغيل: ${r.generator.totalRunHours || '-'}\n▪️ الحالة: ${r.generator.status || '-'}\n\n⛽ الوقود:\n▪️ المضاف يومياً: ${r.fuel.addedDaily || '_'} لتر\n▪️ المستهلك يومياً: ${r.fuel.consumedDaily || '_'} لتر\n▪️ المورد من البلدية: ${r.fuel.municipalSupplied || '_'} لتر\n▪️ الرصيد السابق: ${r.fuel.previousBalance || '_'} لتر\n▪️ الرصيد الحالي: ${r.fuel.currentBalance || '_'} لتر\n▪️ الفرق/الفاقد: ${r.fuel.loss || '_'} لتر\n\n💧 كميات المياه:\n▪️ إنتاج الغاطس: ${r.water.submersibleRate || '_'} كوب/ساعة\n▪️ بعد الفلترة: ${r.water.filteredRate || '_'} كوب/ساعة\n▪️ الإنتاج اليومي: ${r.water.dailyProduction || '_'} كوب\n▪️ العادم: ${r.water.rejectWater || '_'} كوب\n▪️ نسبة الفاقد: ${r.water.lossPercentage || '_'}%\n▪️ المعبأ للجهات: ${r.water.filledWater || 0} كوب\n▪️ عدد السيارات: ${r.water.carsCount || 0}\n▪️ متوسط السيارة: ${r.water.averagePerCar || '_'} كوب\n\n🧪 فحوصات المياه:\n▪️ PH بعد التحلية: ${r.tests.phAfterDesalination || '_'}\n▪️ PH مياه الغاطس: ${r.tests.phWellWater || '_'}\n▪️ TDS مياه محلاة: ${r.tests.tdsDesalinated || '_'}\n▪️ TDS بئر: ${r.tests.tdsWell || '_'}\n▪️ TDS عادم: ${r.tests.tdsReject || '_'}\n▪️ الكلور الحر: ${r.tests.freeChlorine || '_'}\n\n🚚 الجهات المستفيدة:\n${beneficiaries || 'لا توجد جهات مدخلة'}\n\n📝 ملاحظات:\n${r.notes || r.generalNotes || '_'}`;
   }
 
   function summary(reports) {
@@ -158,11 +176,13 @@
 
   window.ReportUtils = {
     ...original,
+    displayDate,
     calcRunHours,
     recalc,
     whatsappText,
     summary,
     normalizeTimeInput,
-    displayTimeArabic
+    displayTimeArabic,
+    normalizeDateInput
   };
 })();
