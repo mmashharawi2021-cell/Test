@@ -106,5 +106,7 @@ window.FirebaseService = (() => {
     }, { merge: true });
   }
 
+  init();
+
   return { isConfigured, init, signIn, signOut, onAuth, listenReports, saveReport, deleteReport, logActivity, seedSettings };
 })();
