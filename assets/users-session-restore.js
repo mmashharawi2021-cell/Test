@@ -24,32 +24,50 @@
     };
   }
 
+  function getOriginalCurrentUser() {
+    return window.AuthUsers?.__sessionRestoreOriginalCurrentUser || window.AuthUsers?.currentUser;
+  }
+
   function restoreSessionUser() {
     if (!window.AuthUsers) return null;
-    const current = window.AuthUsers.currentUser?.();
+
+    const originalCurrentUser = getOriginalCurrentUser();
+    const current = typeof originalCurrentUser === 'function'
+      ? originalCurrentUser.call(window.AuthUsers)
+      : null;
+
     if (current?.permissions) return current;
 
-    // في حال بقاء جلسة Firebase Anonymous مفتوحة بعد تحديث الصفحة ولم تكن بيانات مستخدم النظام الداخلي محفوظة.
     const authUser = window.firebase?.auth?.().currentUser;
     if (authUser) {
       return window.AuthUsers.setCurrentUser(defaultAdminPayload());
     }
+
     return null;
   }
 
   function patchPermissions() {
     if (!window.AuthUsers || window.AuthUsers.__sessionRestorePatched) return;
+
     const originalCurrentUser = window.AuthUsers.currentUser;
     const originalHasPermission = window.AuthUsers.hasPermission;
 
+    window.AuthUsers.__sessionRestoreOriginalCurrentUser = originalCurrentUser;
+    window.AuthUsers.__sessionRestoreOriginalHasPermission = originalHasPermission;
+
     window.AuthUsers.currentUser = function patchedCurrentUser() {
-      return originalCurrentUser?.() || restoreSessionUser();
+      const current = typeof originalCurrentUser === 'function'
+        ? originalCurrentUser.call(window.AuthUsers)
+        : null;
+      return current?.permissions ? current : restoreSessionUser();
     };
 
     window.AuthUsers.hasPermission = function patchedHasPermission(permission) {
       const user = window.AuthUsers.currentUser();
       if (user?.role === 'superAdmin') return true;
-      return originalHasPermission?.(permission) === true;
+      return typeof originalHasPermission === 'function'
+        ? originalHasPermission.call(window.AuthUsers, permission) === true
+        : false;
     };
 
     window.AuthUsers.__sessionRestorePatched = true;
