@@ -1,0 +1,54 @@
+body.presentation-safe .fuel-cleanup-btn,
+body.presentation-safe .fuel-audit-notice {
+  display: none !important;
+}
+
+body.presentation-safe .card-badge.warn.soft-note-badge {
+  color: #d9fff0 !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.12) !important;
+}
+
+body.presentation-safe .official-incoming-fuel-kpi,
+body.presentation-safe .official-stock-kpi,
+body.presentation-safe .official-consumed-fuel-kpi {
+  outline: 1px solid rgba(118, 255, 205, 0.12);
+}
+
+body.presentation-safe .incoming-fuel-section,
+body.presentation-safe .cards-section,
+body.presentation-safe .details {
+  scroll-margin-bottom: 180px;
+}
+
+body.presentation-safe .bottom-space {
+  height: 190px !important;
+}
+
+body.presentation-safe .incoming-fuel-section {
+  padding-bottom: 130px;
+}
+
+body.presentation-safe .fuel-head small {
+  display: block;
+  line-height: 1.8;
+  color: rgba(235, 255, 248, 0.82) !important;
+}
+
+@media (max-width: 720px) {
+  body.presentation-safe .kpi-card span,
+  body.presentation-safe .kpi-card small,
+  body.presentation-safe .kpi-wide small {
+    line-height: 1.7;
+  }
+
+  body.presentation-safe .fuel-actions {
+    gap: 10px;
+  }
+
+  body.presentation-safe .fuel-actions .mini {
+    min-height: 46px;
+    border-radius: 999px;
+  }
+}
