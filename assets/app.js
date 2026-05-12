@@ -352,7 +352,14 @@ window.App = (() => {
     const added = window.ReportUtils.number(r.fuel.addedDaily) + window.ReportUtils.number(r.fuel.municipalSupplied);
     const consumed = window.ReportUtils.number(r.fuel.consumedDaily);
     const current = window.ReportUtils.number(r.fuel.currentBalance);
-    if ((prev || added || consumed || current) && current && Math.abs((prev + added - consumed) - current) > 1) warnings.add('رصيد الوقود الحالي لا يطابق معادلة الرصيد السابق + المضاف - المستهلك.');
+    const loss = window.ReportUtils.number(r.fuel.loss);
+    if ((prev || added || consumed || current || loss) && (current || current === 0) && Math.abs((prev + added - consumed - loss) - current) > 1) warnings.add('رصيد الوقود الحالي لا يطابق معادلة الرصيد السابق + المضاف + المورد - المستهلك - الفاقد.');
+    const previousReport = [...state.reports]
+      .filter(item => item.id !== state.editingId && item.reportDate && item.reportDate < r.reportDate && item.fuel?.currentBalance !== undefined && item.fuel?.currentBalance !== '')
+      .sort((a, b) => String(b.reportDate || '').localeCompare(String(a.reportDate || '')))[0];
+    if (previousReport && r.fuel.previousBalance !== '' && Math.abs(window.ReportUtils.number(r.fuel.previousBalance) - window.ReportUtils.number(previousReport.fuel.currentBalance)) > 1) {
+      warnings.add(`الرصيد السابق لا يطابق رصيد آخر تقرير بتاريخ ${window.ReportUtils.displayDate(previousReport.reportDate)}.`);
+    }
     return [...warnings];
   }
 
@@ -414,7 +421,7 @@ window.App = (() => {
     const tests = reports.map(r => ({ 'التاريخ': r.reportDate, 'PH بعد التحلية': r.tests?.phAfterDesalination, 'PH الغاطس': r.tests?.phWellWater, 'TDS محلاة': r.tests?.tdsDesalinated, 'TDS بئر': r.tests?.tdsWell, 'TDS عادم': r.tests?.tdsReject, 'الكلور الحر': r.tests?.freeChlorine }));
     const beneficiaries = reports.flatMap(r => (r.beneficiaries || []).map(b => ({ 'التاريخ': r.reportDate, 'الجهة': b.name, 'الكمية': b.quantity, 'السيارات': b.cars, 'ملاحظات': b.notes })));
     const s = window.ReportUtils.summary(reports);
-    const summary = [{ 'إجمالي ساعات التشغيل': s.runHours, 'إجمالي الوقود المستهلك': s.fuelConsumed, 'إجمالي الوقود المورد': s.fuelSupplied, 'إجمالي الإنتاج': s.waterProduction, 'إجمالي العادم': s.rejectWater, 'إجمالي المعبأ': s.filledWater, 'إجمالي السيارات': s.cars, 'متوسط الإنتاج اليومي': s.averageDailyProduction, 'نسبة الفاقد': s.lossPercentage }];
+    const summary = [{ 'إجمالي ساعات التشغيل': s.runHours, 'إجمالي الوقود المستهلك': s.fuelConsumed, 'إجمالي الوقود المورد': s.fuelSupplied, 'مضاف يومي': s.fuelAddedDaily, 'مورد من البلدية': s.fuelMunicipalSupplied, 'إجمالي فاقد الوقود': s.fuelLoss, 'إجمالي الإنتاج': s.waterProduction, 'إجمالي العادم': s.rejectWater, 'إجمالي المعبأ': s.filledWater, 'إجمالي السيارات': s.cars, 'متوسط الإنتاج اليومي': s.averageDailyProduction, 'نسبة الفاقد': s.lossPercentage }];
     [['General', general], ['Generator', generator], ['Fuel', fuel], ['Water Quantities', water], ['Water Tests', tests], ['Beneficiaries', beneficiaries], ['Summary', summary]].forEach(([name, rows]) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name));
     return wb;
   }
@@ -433,7 +440,7 @@ window.App = (() => {
 
   function openSummary() {
     const s = window.ReportUtils.summary(state.reports);
-    confirmDialog({ title: 'ملخص التقارير', message: `ساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`, confirmText: 'تم', cancelText: 'إغلاق' });
+    confirmDialog({ title: 'ملخص التقارير', message: `ساعات التشغيل: ${s.runHours.toFixed(1)}\nالوقود المستهلك: ${s.fuelConsumed}\nالوقود المستلم: ${s.fuelSupplied}\nفاقد الوقود: ${s.fuelLoss}\nالمياه المعبأة: ${s.filledWater}\nعدد السيارات: ${s.cars}\nنسبة الفاقد: ${s.lossPercentage}%`, confirmText: 'تم', cancelText: 'إغلاق' });
   }
 
   function goHome() { document.getElementById('top')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
