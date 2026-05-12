@@ -1,11 +1,12 @@
-/* Incoming fuel + export center v2
-   Safe additive module. Keeps old report schema untouched.
-   Fixes Firestore composite-index issue by using a single orderBy and client-side sorting.
+/* Incoming fuel + export center v3
+   Source-level fix: compact toolbar, duplicate-safe incoming fuel, cleanup duplicates.
 */
 (function () {
   const COLLECTION = 'fuelEntries';
   const state = {
     entries: [],
+    rawEntries: [],
+    duplicates: [],
     unsubscribe: null,
     observerStarted: false,
     editingId: null,
@@ -39,10 +40,18 @@
     return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
   }
 
+  function clean(value) { return String(value ?? '').replace(/\s+/g, ' ').trim(); }
+
   function num(value) {
     if (window.ReportUtils?.number) return window.ReportUtils.number(value);
-    const n = Number(String(value ?? '').replace(',', '.'));
+    const n = Number(String(value ?? '').replace(',', '.').replace(/[^0-9.\-]/g, ''));
     return Number.isFinite(n) ? n : 0;
+  }
+
+  function fmt(value, digits = 2) {
+    const n = num(value);
+    const r = +n.toFixed(digits);
+    return Number.isInteger(r) ? String(r) : String(r);
   }
 
   function today() { return new Date().toISOString().slice(0, 10); }
@@ -59,7 +68,7 @@
   }
 
   function serverTime() { return firebase.firestore.FieldValue.serverTimestamp(); }
-  function userName() { return window.WATER_APP_SETTINGS?.defaultUserName || 'صالح الدحنون'; }
+  function userName() { return window.AuthUsers?.currentUser?.()?.fullName || window.WATER_APP_SETTINGS?.defaultUserName || 'صالح الدحنون'; }
   function configured() { return Boolean(window.firebase?.firestore && window.FirebaseService?.isConfigured); }
 
   function toast(message, type = 'ok') {
@@ -93,19 +102,53 @@
     };
   }
 
+  function entryKey(entry) {
+    return [
+      clean(entry.date),
+      clean(entry.time),
+      clean(entry.supplier || entry.donor),
+      fmt(entry.quantityLiters ?? entry.quantity),
+      clean(entry.fillingMethod),
+      clean(entry.deliveredBy)
+    ].join('|');
+  }
+
   function sortEntries(list) {
     return [...list].sort((a, b) => String(`${b.date || ''} ${b.time || ''}`).localeCompare(String(`${a.date || ''} ${a.time || ''}`)));
+  }
+
+  function splitUnique(list) {
+    const seen = new Map();
+    const unique = [];
+    const duplicates = [];
+    sortEntries(list).forEach(item => {
+      const key = entryKey(item);
+      if (seen.has(key)) duplicates.push(item);
+      else {
+        seen.set(key, item.id);
+        unique.push(item);
+      }
+    });
+    return { unique, duplicates };
+  }
+
+  function setEntries(list) {
+    state.rawEntries = sortEntries(list || []);
+    const split = splitUnique(state.rawEntries);
+    state.entries = split.unique;
+    state.duplicates = split.duplicates;
+    window.WaterFuelRawEntries = state.rawEntries;
   }
 
   function startListener() {
     if (state.unsubscribe || !configured()) return;
     try {
       state.unsubscribe = db().collection(COLLECTION).orderBy('date', 'desc').onSnapshot(snapshot => {
-        state.entries = sortEntries(snapshot.docs.map(normalize));
+        setEntries(snapshot.docs.map(normalize));
         patchDom();
       }, error => {
         console.warn('fuelEntries listener failed', error);
-        state.entries = [];
+        setEntries([]);
         patchDom();
       });
     } catch (error) {
@@ -113,53 +156,57 @@
     }
   }
 
-  function normalizeHeroButtons() {
-    const heroActions = document.querySelector('.hero-actions');
-    if (!heroActions) return;
-    heroActions.classList.add('professional-actions');
+  function can(permission) {
+    if (!window.AuthUsers?.currentUser) return true;
+    const user = window.AuthUsers.currentUser();
+    if (!user) return true;
+    if (user.role === 'superAdmin' || user.roleLabel === 'مدير النظام') return true;
+    return window.AuthUsers.hasPermission?.(permission) === true;
+  }
 
-    const seen = new Set();
-    [...heroActions.querySelectorAll('button')].forEach(btn => {
-      const text = btn.textContent.replace(/\s+/g, ' ').trim();
-      if (!text) return;
-      if (seen.has(text)) btn.remove();
-      else seen.add(text);
-    });
-
-    [...heroActions.querySelectorAll('button')].forEach(btn => {
-      const text = btn.textContent || '';
-      btn.classList.add('toolbar-btn');
-      if (text.includes('إضافة تقرير')) btn.classList.add('toolbar-main');
-      if (text.includes('إضافة وقود')) btn.classList.add('toolbar-fuel');
-      if (text.includes('مركز التصدير')) btn.classList.add('toolbar-export');
-      if (text.includes('خروج')) btn.classList.add('toolbar-logout');
-      if (text.includes('Excel شامل')) btn.classList.add('old-export-hidden');
-    });
+  function actionButton(label, onclick, className = '') {
+    return `<button class="btn toolbar-btn ${className}" type="button" onclick="${onclick}">${label}</button>`;
   }
 
   function ensureHeroButtons() {
     const heroActions = document.querySelector('.hero-actions');
     if (!heroActions) return;
-    if (!heroActions.querySelector('.fuel-entry-open-btn')) {
-      const btn = document.createElement('button');
-      btn.className = 'btn toolbar-btn toolbar-fuel fuel-entry-open-btn';
-      btn.type = 'button';
-      btn.textContent = '⛽ إضافة وقود وارد';
-      btn.onclick = () => openFuelModal();
-      const addReport = [...heroActions.children].find(el => el.textContent.includes('إضافة تقرير'));
-      addReport?.insertAdjacentElement('afterend', btn) || heroActions.prepend(btn);
-    }
-    if (!heroActions.querySelector('.export-center-open-btn')) {
-      const btn = document.createElement('button');
-      btn.className = 'btn toolbar-btn toolbar-export export-center-open-btn';
-      btn.type = 'button';
-      btn.textContent = '📦 مركز التصدير';
-      btn.onclick = () => openExportCenter();
-      const summary = [...heroActions.children].find(el => el.textContent.includes('تقارير تجميعية'));
-      summary?.insertAdjacentElement('beforebegin', btn) || heroActions.append(btn);
-    }
-    normalizeHeroButtons();
+    const signature = [
+      can('createReports'), can('manageUsers'), can('manageSettings'), can('exportExcel'), window.AuthUsers?.currentUser?.()?.role || ''
+    ].join('|');
+    if (heroActions.dataset.compactToolbar === signature) return;
+
+    const primary = can('createReports') ? actionButton('➕ إضافة تقرير جديد', 'App.openNew()', 'toolbar-main') : '';
+    const fuel = actionButton('⛽ إضافة وقود وارد', 'WaterFuel.openFuelModal()', 'toolbar-fuel fuel-entry-open-btn');
+    const moreItems = [
+      can('createReports') ? actionButton('⧉ تكرار آخر تقرير', 'App.duplicateLastReport()', 'more-item') : '',
+      actionButton('📈 تقارير تجميعية', 'App.openSummary()', 'more-item'),
+      actionButton('📦 مركز التصدير', 'WaterFuel.openExportCenter()', 'more-item'),
+      can('manageUsers') ? '<button class="btn toolbar-btn more-item" data-users-force-button="true" type="button" onclick="UsersUI.open()">👥 المستخدمون</button>' : '',
+      can('manageSettings') ? actionButton('⚙️ الإعدادات', 'App.openSettings()', 'more-item') : '',
+      actionButton('🚪 خروج', 'App.logout()', 'more-item toolbar-logout')
+    ].filter(Boolean).join('');
+
+    heroActions.className = 'hero-actions professional-actions compact-toolbar';
+    heroActions.dataset.compactToolbar = signature;
+    heroActions.innerHTML = `
+      ${primary}
+      ${fuel}
+      <div class="more-menu-wrap">
+        <button class="btn toolbar-btn toolbar-more" type="button" onclick="WaterFuel.toggleMoreMenu(event)">☰ المزيد</button>
+        <div id="heroMoreMenu" class="more-menu">${moreItems}</div>
+      </div>
+    `;
   }
+
+  function toggleMoreMenu(event) {
+    event?.stopPropagation?.();
+    document.getElementById('heroMoreMenu')?.classList.toggle('open');
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.more-menu-wrap')) document.getElementById('heroMoreMenu')?.classList.remove('open');
+  });
 
   function hideOldExports() {
     document.querySelectorAll('.report-actions-panel button').forEach(btn => {
@@ -189,7 +236,7 @@
       <tr>
         <td data-label="التاريخ"><strong>${esc(item.date)}</strong><br><small>${esc(item.day)} ${esc(item.time)}</small></td>
         <td data-label="المورد">${esc(item.supplier || '-')}</td>
-        <td data-label="الكمية"><strong>${num(item.quantityLiters)}</strong> لتر</td>
+        <td data-label="الكمية"><strong>${fmt(item.quantityLiters)}</strong> لتر</td>
         <td data-label="طريقة التعبئة">${esc(item.fillingMethod || '-')}</td>
         <td data-label="المسلّم">${esc(item.deliveredBy || '-')}</td>
         <td data-label="الإجراءات"><div class="fuel-actions"><button class="mini" onclick="WaterFuel.openFuelModal('${esc(item.id)}')">تعديل</button><button class="mini danger" onclick="WaterFuel.deleteFuelEntry('${esc(item.id)}')">حذف</button></div></td>
@@ -197,8 +244,11 @@
 
     section.innerHTML = `
       <div class="fuel-head">
-        <div><p class="eyebrow">الوقود الوارد</p><h2>آخر عمليات الوقود الوارد</h2><small>إجمالي الوقود الوارد المسجل: ${total} لتر</small></div>
-        <button class="btn primary action-float" onclick="WaterFuel.openFuelModal()">➕ إضافة وقود وارد</button>
+        <div><p class="eyebrow">الوقود الوارد</p><h2>آخر عمليات الوقود الوارد</h2><small>إجمالي الوقود الوارد المسجل: ${fmt(total)} لتر${state.duplicates.length ? ` — تم إخفاء ${state.duplicates.length} سجل مكرر` : ''}</small></div>
+        <div class="fuel-head-actions">
+          <button class="btn primary fuel-fixed-add" onclick="WaterFuel.openFuelModal()">➕ إضافة وقود وارد</button>
+          ${state.duplicates.length ? '<button class="btn fuel-cleanup-btn" onclick="WaterFuel.cleanupDuplicateFuelEntries()">تنظيف المكرر</button>' : ''}
+        </div>
       </div>
       ${rows ? `<div class="fuel-table-wrap"><table class="fuel-table"><thead><tr><th>التاريخ</th><th>المورد</th><th>الكمية</th><th>طريقة التعبئة</th><th>المسلّم</th><th>الإجراءات</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="fuel-empty">لا توجد عمليات وقود وارد محفوظة حتى الآن.</div>'}
     `;
@@ -225,7 +275,7 @@
           <label class="wide">اسم الشخص الذي قام بتسليم الوقود<input name="deliveredBy" required value="${esc(entry.deliveredBy)}"></label>
           <label class="wide">ملاحظات اختيارية<textarea name="notes">${esc(entry.notes)}</textarea></label>
         </form>
-        <div class="fuel-modal-actions"><button class="btn primary big action-float" onclick="WaterFuel.saveFuelEntry()">حفظ الوقود الوارد</button><button class="btn" onclick="WaterFuel.closeFuelModal()">إلغاء</button></div>
+        <div class="fuel-modal-actions"><button class="btn primary big" onclick="WaterFuel.saveFuelEntry()">حفظ الوقود الوارد</button><button class="btn" onclick="WaterFuel.closeFuelModal()">إلغاء</button></div>
       </div>
     </div>`;
   }
@@ -233,7 +283,7 @@
   function openFuelModal(id = null) {
     state.editingId = id || null;
     document.getElementById('fuelEntryModal')?.remove();
-    const entry = id ? state.entries.find(x => x.id === id) || defaultEntry() : defaultEntry();
+    const entry = id ? state.rawEntries.find(x => x.id === id) || defaultEntry() : defaultEntry();
     document.body.insertAdjacentHTML('beforeend', modalHtml(entry));
   }
 
@@ -251,24 +301,32 @@
     const form = document.getElementById('fuelEntryForm');
     const data = new FormData(form);
     const payload = {
-      day: String(data.get('day') || '').trim(),
-      date: String(data.get('date') || '').trim(),
-      time: String(data.get('time') || '').trim(),
-      supplier: String(data.get('supplier') || '').trim(),
+      day: clean(data.get('day')),
+      date: clean(data.get('date')),
+      time: clean(data.get('time')),
+      supplier: clean(data.get('supplier')),
       quantityLiters: Number(data.get('quantityLiters')),
-      fillingMethod: String(data.get('fillingMethod') || '').trim(),
-      deliveredBy: String(data.get('deliveredBy') || '').trim(),
-      notes: String(data.get('notes') || '').trim()
+      fillingMethod: clean(data.get('fillingMethod')),
+      deliveredBy: clean(data.get('deliveredBy')),
+      notes: clean(data.get('notes'))
     };
     if (!payload.day || !payload.date || !payload.time || !payload.supplier || !payload.fillingMethod || !payload.deliveredBy) throw new Error('يرجى تعبئة جميع الحقول الأساسية.');
     if (!Number.isFinite(payload.quantityLiters) || payload.quantityLiters <= 0) throw new Error('كمية الوقود يجب أن تكون رقمًا أكبر من صفر.');
     return payload;
   }
 
+  function duplicateExists(payload) {
+    const target = entryKey(payload);
+    return state.rawEntries.some(item => item.id !== state.editingId && entryKey(item) === target);
+  }
+
   async function saveFuelEntry() {
+    const btn = document.querySelector('#fuelEntryModal .fuel-modal-actions .btn.primary');
     try {
       if (!configured()) throw new Error('Firebase غير متاح أو غير مهيأ.');
       const payload = { ...collectFuel(), updatedAt: serverTime(), updatedBy: userName() };
+      if (duplicateExists(payload)) throw new Error('هذا الوقود الوارد مسجل مسبقًا بنفس البيانات. لم يتم حفظ نسخة مكررة.');
+      if (btn) { btn.disabled = true; btn.textContent = 'جاري الحفظ...'; }
       if (state.editingId) {
         await db().collection(COLLECTION).doc(state.editingId).set(payload, { merge: true });
         toast('تم تعديل سجل الوقود الوارد', 'ok');
@@ -280,6 +338,8 @@
     } catch (error) {
       toast(error?.message || 'تعذر حفظ الوقود الوارد', 'warn');
       console.error(error);
+    } finally {
+      if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'حفظ الوقود الوارد'; }
     }
   }
 
@@ -290,6 +350,20 @@
       toast('تم حذف سجل الوقود الوارد', 'ok');
     } catch (error) {
       toast('تعذر حذف سجل الوقود الوارد', 'warn');
+      console.error(error);
+    }
+  }
+
+  async function cleanupDuplicateFuelEntries() {
+    if (!state.duplicates.length) return toast('لا توجد سجلات مكررة للتنظيف.', 'ok');
+    if (!confirm(`سيتم حذف ${state.duplicates.length} سجل مكرر وترك نسخة واحدة. هل تريد المتابعة؟`)) return;
+    try {
+      const batch = db().batch();
+      state.duplicates.forEach(item => batch.delete(db().collection(COLLECTION).doc(item.id)));
+      await batch.commit();
+      toast(`تم حذف ${state.duplicates.length} سجل مكرر.`, 'ok');
+    } catch (error) {
+      toast('تعذر تنظيف السجلات المكررة.', 'warn');
       console.error(error);
     }
   }
@@ -343,7 +417,7 @@
         <label class="${type.month ? '' : 'old-export-hidden'}">الشهر<input name="month" type="month" value="${today().slice(0, 7)}"></label>
         <label class="${type.beneficiary ? '' : 'old-export-hidden'}">الجهة المستفيدة<input name="beneficiary" placeholder="اكتب اسم الجهة"></label>
         <label>نوع الملف<select name="fileType"><option value="excel">Excel</option><option value="pdf">PDF</option></select></label>
-        <div class="wide export-actions"><button class="btn primary big action-float" type="button" onclick="WaterFuel.executeExport()">تنفيذ التصدير: ${esc(type.label)}</button></div>
+        <div class="wide export-actions"><button class="btn primary big" type="button" onclick="WaterFuel.executeExport()">تنفيذ التصدير: ${esc(type.label)}</button></div>
       </form>`;
   }
 
@@ -354,7 +428,7 @@
 
   async function getFuelEntries() {
     const snap = await db().collection(COLLECTION).orderBy('date', 'desc').get();
-    return sortEntries(snap.docs.map(normalize));
+    return splitUnique(sortEntries(snap.docs.map(normalize))).unique;
   }
 
   function inRange(date, from, to) {
@@ -452,6 +526,6 @@
     setTimeout(patchDom, 1200);
   }
 
-  window.WaterFuel = { openFuelModal, closeFuelModal, syncFuelDay, saveFuelEntry, deleteFuelEntry, openExportCenter, closeExportCenter, setExportType, executeExport, patchDom };
+  window.WaterFuel = { openFuelModal, closeFuelModal, syncFuelDay, saveFuelEntry, deleteFuelEntry, cleanupDuplicateFuelEntries, openExportCenter, closeExportCenter, setExportType, executeExport, toggleMoreMenu, patchDom };
   init();
 })();
