@@ -130,31 +130,10 @@
     }
   }
 
-  function cleanPublicUi() {
-    document.querySelectorAll('[data-audit-button], .fuel-cleanup-btn, .fuel-audit-notice, #dataAuditModal, .audit-modal').forEach(el => el.remove());
-    document.querySelectorAll('button').forEach(button => {
-      const text = button.textContent || '';
-      if (text.includes('فحص البيانات') || text.includes('تنظيف المكرر')) button.remove();
-    });
-    const section = document.getElementById('incomingFuelSection');
-    const small = section?.querySelector('.fuel-head small');
-    if (small) {
-      small.textContent = String(small.textContent || '')
-        .replace(/\s*[—-]\s*تم\s+إخفاء\s+\d+\s+(سجل|سجلات)?\s*مكرر/g, '')
-        .replace(/\s*تم\s+إخفاء\s+\d+\s+(سجل|سجلات)?\s*مكرر/g, '')
-        .trim();
-    }
-    document.querySelectorAll('.card-badge.warn').forEach(badge => {
-      badge.textContent = badge.textContent?.match(/\d+/) ? `${badge.textContent.match(/\d+/)[0]} ملاحظة` : 'مراجعة';
-      badge.classList.add('review-soft-badge');
-    });
-  }
-
   function applyDomCleanup() {
     moveReportActionsToTop();
     fixExternalWaterRows();
     fixLiveFuelBalance();
-    cleanPublicUi();
   }
 
   function patchAll() {
@@ -167,7 +146,7 @@
   window.addEventListener('DOMContentLoaded', () => {
     patchAll();
     const observer = new MutationObserver(applyDomCleanup);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, { childList: true, subtree: true });
     document.body.addEventListener('input', applyDomCleanup, true);
     document.body.addEventListener('change', applyDomCleanup, true);
   });
