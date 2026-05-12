@@ -120,13 +120,16 @@ window.ReportUtils = (() => {
       const r = recalc(item);
       acc.runHours += hoursToDecimal(r.generator.totalRunHours);
       acc.fuelConsumed += number(r.fuel.consumedDaily);
-      acc.fuelSupplied += number(r.fuel.municipalSupplied);
+      acc.fuelSupplied += number(r.fuel.municipalSupplied) + number(r.fuel.addedDaily);
+      acc.fuelMunicipalSupplied += number(r.fuel.municipalSupplied);
+      acc.fuelAddedDaily += number(r.fuel.addedDaily);
+      acc.fuelLoss += number(r.fuel.loss);
       acc.waterProduction += number(r.water.dailyProduction);
       acc.rejectWater += number(r.water.rejectWater);
       acc.filledWater += number(r.water.filledWater);
       acc.cars += number(r.water.carsCount);
       return acc;
-    }, { runHours: 0, fuelConsumed: 0, fuelSupplied: 0, waterProduction: 0, rejectWater: 0, filledWater: 0, cars: 0 });
+    }, { runHours: 0, fuelConsumed: 0, fuelSupplied: 0, fuelMunicipalSupplied: 0, fuelAddedDaily: 0, fuelLoss: 0, waterProduction: 0, rejectWater: 0, filledWater: 0, cars: 0 });
     totals.averageDailyProduction = list.length ? +(totals.waterProduction / list.length).toFixed(2) : 0;
     totals.averageFuelConsumption = list.length ? +(totals.fuelConsumed / list.length).toFixed(2) : 0;
     totals.lossPercentage = totals.waterProduction ? +((totals.rejectWater / totals.waterProduction) * 100).toFixed(2) : 0;
