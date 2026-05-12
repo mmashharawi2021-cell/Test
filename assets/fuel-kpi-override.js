@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '20260513-fuel-kpi-override-1';
+  const VERSION = '20260513-fuel-kpi-override-2';
 
   function num(value) {
     if (window.ReportUtils?.number) return window.ReportUtils.number(value);
@@ -15,6 +15,10 @@
 
   function clean(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  function displayDate(date) {
+    return window.ReportUtils?.displayDate ? window.ReportUtils.displayDate(date) : String(date || '');
   }
 
   function fuelEntryKey(entry) {
@@ -68,16 +72,17 @@
     if (small) small.textContent = hint;
   }
 
-  function renderValues({ incoming, used, remaining }) {
+  function renderValues({ incoming, used, remaining, startDate }) {
     document.documentElement.dataset.fuelKpiOverride = VERSION;
 
     const remainingCard = findCard([/السولار في المخزون/, /آخر رصيد/, /وقود متبقي/]);
     const usedCard = findCard([/وقود مستهلك/, /إجمالي السولار المستهلك/, /وقود مستخدم/]);
     const incomingCard = findCard([/إجمالي السولار المستلم/, /سولار مستلم/, /وقود وارد/]);
+    const dateHint = startDate ? `من ${displayDate(startDate)} حتى اليوم` : 'لا يوجد وقود وارد بعد';
 
     setCard(incomingCard, 'وقود وارد', incoming, 'من زر إضافة وقود وارد', 'fuel-incoming-kpi');
-    setCard(usedCard, 'وقود مستخدم', used, 'من استهلاك التقارير اليومية', 'fuel-used-kpi');
-    setCard(remainingCard, 'وقود متبقي', remaining, 'الوارد - المستخدم', 'fuel-remaining-kpi');
+    setCard(usedCard, 'وقود مستخدم', used, dateHint, 'fuel-used-kpi');
+    setCard(remainingCard, 'وقود متبقي', remaining, 'الوارد - المستخدم لنفس الفترة', 'fuel-remaining-kpi');
   }
 
   async function fetchSummary() {
@@ -90,12 +95,18 @@
 
     const incomingEntries = uniqueFuelEntries(fuelSnap.docs.map(normalizeFuelDoc));
     const incoming = incomingEntries.reduce((sum, entry) => sum + num(entry.quantityLiters), 0);
-    const used = reportsSnap.docs.reduce((sum, doc) => {
-      const data = doc.data() || {};
-      return sum + num(data?.fuel?.consumedDaily);
-    }, 0);
+    const dates = incomingEntries.map(entry => entry.date).filter(Boolean).sort();
+    const startDate = dates[0] || '';
 
-    return { incoming, used, remaining: incoming - used };
+    const used = startDate
+      ? reportsSnap.docs.reduce((sum, doc) => {
+          const data = doc.data() || {};
+          if (!data.reportDate || data.reportDate < startDate) return sum;
+          return sum + num(data?.fuel?.consumedDaily);
+        }, 0)
+      : 0;
+
+    return { incoming, used, remaining: incoming - used, startDate };
   }
 
   async function update() {
