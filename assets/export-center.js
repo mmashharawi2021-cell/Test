@@ -108,6 +108,32 @@
     return report?.generator?.periods?.[0] || {};
   }
 
+  function toast(message, type = 'info') {
+    let host = document.getElementById('exportToastHost');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'exportToastHost';
+      document.body.appendChild(host);
+    }
+    const item = document.createElement('div');
+    item.className = `export-toast ${type}`;
+    item.textContent = message;
+    host.appendChild(item);
+    requestAnimationFrame(() => item.classList.add('show'));
+    setTimeout(() => {
+      item.classList.remove('show');
+      setTimeout(() => item.remove(), 240);
+    }, 3600);
+  }
+
+  function setStatus(message, type = '') {
+    lastStatus = message || '';
+    const host = document.getElementById('exportStatus');
+    if (!host) return;
+    host.className = `export-status ${type}`;
+    host.textContent = lastStatus;
+  }
+
   function getDb() {
     if (!window.firebase?.firestore) throw new Error('Firebase Firestore غير متاح.');
     window.FirebaseService?.init?.();
@@ -115,25 +141,22 @@
   }
 
   async function fetchReports() {
-    try {
-      const snapshot = await getDb().collection('reports').orderBy('reportDate', 'desc').get();
-      const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      window.__WATER_REPORTS_CACHE__ = reports;
-      return reports;
-    } catch (error) {
-      console.warn('ExportCenter: reports fetch failed, using cache.', error);
-      return window.__WATER_REPORTS_CACHE__ || [];
-    }
+    const snapshot = await getDb().collection('reports').orderBy('reportDate', 'desc').get();
+    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    window.__WATER_REPORTS_CACHE__ = reports;
+    return reports;
   }
 
   async function fetchFuelEntries() {
-    try {
-      const snapshot = await getDb().collection('fuelEntries').orderBy('date', 'desc').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-      console.warn('ExportCenter: fuelEntries fetch failed, using cache.', error);
-      return window.WaterFuelRawEntries || [];
-    }
+    const snapshot = await getDb().collection('fuelEntries').orderBy('date', 'desc').get();
+    const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    window.WaterFuelRawEntries = entries;
+    return entries;
+  }
+
+  async function fetchFirestoreData() {
+    const [reports, fuelEntries] = await Promise.all([fetchReports(), fetchFuelEntries()]);
+    return { reports, fuelEntries };
   }
 
   function inRange(date, from, to) {
@@ -306,21 +329,35 @@
       })));
   }
 
-  function rowsFor(typeId, reports, fuelEntries) {
+  function buildExportResult(typeId, rawReports, rawFuelEntries) {
+    selectedType = typeId;
     const type = TYPES[typeId] || TYPES.reportsAll;
-    const reportList = filterReports(reports, typeId);
-    const fuelList = filterFuel(fuelEntries, typeId);
+    const reportList = filterReports(rawReports, typeId);
+    const fuelList = filterFuel(rawFuelEntries, typeId);
+
+    if (type.data === 'beneficiaryOne' && !rangeFor(typeId).beneficiary) {
+      return { rows: [], count: 0, emptyReason: 'اكتب اسم الجهة أولًا قبل تصدير جهة محددة.' };
+    }
 
     switch (type.data) {
-      case 'reports': return reportRows(reportList);
-      case 'fuelSummary': return fuelSummaryRows(reportList, fuelList);
-      case 'incomingFuel': return incomingFuelRows(fuelList);
-      case 'consumedFuel': return consumedFuelRows(reportList);
-      case 'producedWater': return producedWaterRows(reportList);
-      case 'deliveredWater': return beneficiaryRows(reportList, false);
-      case 'beneficiaries': return beneficiaryRows(reportList, false);
-      case 'beneficiaryOne': return beneficiaryRows(reportList, true);
-      default: return reportRows(reportList);
+      case 'reports': return { rows: reportRows(reportList), count: reportList.length };
+      case 'fuelSummary': {
+        const sourceCount = reportList.length + fuelList.length;
+        return { rows: sourceCount ? fuelSummaryRows(reportList, fuelList) : [], count: sourceCount };
+      }
+      case 'incomingFuel': return { rows: incomingFuelRows(fuelList), count: fuelList.length };
+      case 'consumedFuel': return { rows: consumedFuelRows(reportList), count: reportList.length };
+      case 'producedWater': return { rows: producedWaterRows(reportList), count: reportList.length };
+      case 'deliveredWater':
+      case 'beneficiaries': {
+        const rows = beneficiaryRows(reportList, false);
+        return { rows, count: rows.length };
+      }
+      case 'beneficiaryOne': {
+        const rows = beneficiaryRows(reportList, true);
+        return { rows, count: rows.length };
+      }
+      default: return { rows: reportRows(reportList), count: reportList.length };
     }
   }
 
@@ -340,34 +377,24 @@
 
   function exportExcel(typeId, rows) {
     if (!window.XLSX) throw new Error('مكتبة Excel غير محملة. تحقق من الاتصال بالإنترنت.');
-    const finalRows = rows.length ? rows : [{ 'ملاحظة': 'لا توجد بيانات للتصدير' }];
     const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(finalRows, { skipHeader: false });
-    autoWidth(sheet, finalRows);
+    const sheet = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+    autoWidth(sheet, rows);
     XLSX.utils.book_append_sheet(workbook, sheet, 'التقارير');
     workbook.Workbook = { Views: [{ RTL: true }] };
     const type = TYPES[typeId] || TYPES.reportsAll;
     XLSX.writeFile(workbook, `${safeFileName(type.title)} - ${safeFileName(rangeFor(typeId).label)}.xlsx`);
   }
 
-  function exportPdf(typeId, rows) {
-    const finalRows = rows.length ? rows : [{ 'ملاحظة': 'لا توجد بيانات للتصدير' }];
-    const headers = Object.keys(finalRows[0] || {});
+  function exportPdf(typeId, rows, popupWindow = null) {
+    const headers = Object.keys(rows[0] || {});
     const type = TYPES[typeId] || TYPES.reportsAll;
     const title = `${type.title} - ${rangeFor(typeId).label}`;
-    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Tahoma,Arial;direction:rtl;padding:20px;line-height:1.7}h1{font-size:20px;margin:0 0 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:right;vertical-align:top}th{background:#eef6f2}@media print{body{padding:10mm}}</style></head><body><h1>${esc(title)}</h1><table><thead><tr>${headers.map(header => `<th>${esc(header)}</th>`).join('')}</tr></thead><tbody>${finalRows.map(row => `<tr>${headers.map(header => `<td>${esc(row[header])}</td>`).join('')}</tr>`).join('')}</tbody></table><script>print()<\/script></body></html>`;
-    const win = window.open('', '_blank');
+    const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Tahoma,Arial;direction:rtl;padding:20px;line-height:1.7}h1{font-size:20px;margin:0 0 14px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #999;padding:6px;text-align:right;vertical-align:top}th{background:#eef6f2}@media print{body{padding:10mm}}</style></head><body><h1>${esc(title)}</h1><table><thead><tr>${headers.map(header => `<th>${esc(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map(header => `<td>${esc(row[header])}</td>`).join('')}</tr>`).join('')}</tbody></table><script>setTimeout(() => print(), 300)<\/script></body></html>`;
+    const win = popupWindow || window.open('', '_blank');
     if (!win) throw new Error('المتصفح منع نافذة PDF. اسمح بالنوافذ المنبثقة.');
     win.document.write(html);
     win.document.close();
-  }
-
-  function setStatus(message, type = '') {
-    lastStatus = message || '';
-    const host = document.getElementById('exportStatus');
-    if (!host) return;
-    host.className = `export-status ${type}`;
-    host.textContent = lastStatus;
   }
 
   function setLoading(typeId, loading) {
@@ -384,22 +411,46 @@
 
   async function download(typeId = selectedType) {
     const resolved = TYPE_ALIASES[typeId] || typeId;
-    if (!TYPES[resolved]) throw new Error('نوع التصدير غير معروف.');
+    if (!TYPES[resolved]) {
+      toast('نوع التصدير غير معروف.', 'error');
+      setStatus('نوع التصدير غير معروف.', 'error');
+      return;
+    }
+
     selectedType = resolved;
+    const fileType = inputs().fileType;
+    const pdfWindow = fileType === 'pdf' ? window.open('', '_blank') : null;
+
     try {
       setLoading(resolved, true);
-      setStatus('جاري تجهيز البيانات...', 'loading');
-      const [reports, fuelEntries] = await Promise.all([fetchReports(), fetchFuelEntries()]);
-      const rows = rowsFor(resolved, reports, fuelEntries);
-      if (!rows.length) throw new Error('لا توجد بيانات ضمن الفترة المحددة لهذا التصدير.');
-      const fileType = inputs().fileType;
-      if (fileType === 'pdf') exportPdf(resolved, rows);
-      else exportExcel(resolved, rows);
-      setStatus(`تم تجهيز ${rows.length} صف للتصدير بنجاح.`, 'ok');
+      setStatus('جاري جلب البيانات من Firestore...', 'loading');
+      toast('جاري جلب البيانات من Firestore...', 'info');
+
+      const { reports, fuelEntries } = await fetchFirestoreData();
+      setStatus('تم جلب البيانات. جاري تطبيق الفلتر...', 'loading');
+
+      const result = buildExportResult(resolved, reports, fuelEntries);
+      if (!result.count || !result.rows.length) {
+        if (pdfWindow) pdfWindow.close();
+        const message = result.emptyReason || 'لا توجد نتائج ضمن الفلتر المحدد. لم يتم إنشاء ملف فارغ.';
+        setStatus(message, 'warning');
+        toast(message, 'warning');
+        return;
+      }
+
+      setStatus(`تم العثور على ${result.count} نتيجة. جاري إنشاء الملف...`, 'loading');
+      if (fileType === 'pdf') exportPdf(resolved, result.rows, pdfWindow);
+      else exportExcel(resolved, result.rows);
+
+      const doneMessage = `تم إنشاء الملف بنجاح: ${result.rows.length} صف.`;
+      setStatus(doneMessage, 'ok');
+      toast(doneMessage, 'ok');
     } catch (error) {
+      if (pdfWindow) pdfWindow.close();
       console.error('ExportCenter download failed:', error);
-      setStatus(error.message || 'فشل التصدير.', 'error');
-      alert(`فشل التصدير: ${error.message || error}`);
+      const message = error.message || 'فشل التصدير.';
+      setStatus(message, 'error');
+      toast(message, 'error');
     } finally {
       setLoading(resolved, false);
     }
@@ -417,7 +468,7 @@
     section.style.display = 'block';
     section.innerHTML = `
       <div class="official-export-head">
-        <div><p class="eyebrow">مركز التصدير</p><h2>تصدير مباشر مصنّف</h2><small>اختر نوع الملف والفترة، ثم اضغط على نوع التصدير المطلوب ليبدأ التحميل مباشرة.</small></div>
+        <div><p class="eyebrow">مركز التصدير</p><h2>تصدير مباشر مصنّف</h2><small>كل زر يجلب البيانات من Firestore، يطبق الفلتر، يفحص عدد النتائج، ثم ينشئ الملف مباشرة.</small></div>
         <button class="btn" type="button" onclick="ExportCenter.close()">إغلاق</button>
       </div>
       <div class="official-export-filters">
@@ -474,13 +525,14 @@
       .official-export-filters input,.official-export-filters select{min-height:42px;border-radius:13px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:inherit;padding:8px 10px;font-family:inherit}
       .official-export-filters .wide{grid-column:span 2}
       .export-status{min-height:32px;margin:8px 0 14px;padding:8px 12px;border-radius:13px;background:rgba(255,255,255,.06);color:var(--muted,#9fb0c3);font-weight:800}
-      .export-status.ok{color:#bbf7d0;background:rgba(22,163,74,.13)}.export-status.error{color:#fecaca;background:rgba(220,38,38,.16)}.export-status.loading{color:#bfdbfe;background:rgba(59,130,246,.14)}
+      .export-status.ok{color:#bbf7d0;background:rgba(22,163,74,.13)}.export-status.error{color:#fecaca;background:rgba(220,38,38,.16)}.export-status.loading{color:#bfdbfe;background:rgba(59,130,246,.14)}.export-status.warning{color:#fde68a;background:rgba(245,158,11,.16)}
       .official-export-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
       .official-export-group{border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(255,255,255,.055);padding:14px}
       .official-export-group h3{margin:0 0 12px;font-size:16px}
       .official-export-group>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
       .export-card-btn{min-height:72px;border:1px solid rgba(52,211,153,.22);border-radius:16px;background:linear-gradient(135deg,rgba(15,23,42,.75),rgba(16,185,129,.14));color:inherit;font-family:inherit;text-align:right;padding:10px 12px;cursor:pointer;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:3px 8px;transition:transform .16s ease,border-color .16s ease}
       .export-card-btn:hover{transform:translateY(-1px);border-color:rgba(52,211,153,.42)}.export-card-btn.active{outline:2px solid rgba(56,189,248,.5)}.export-card-btn:disabled{opacity:.62;cursor:wait}.export-card-btn span{grid-row:span 2}.export-card-btn b{font-size:14px}.export-card-btn small{color:var(--muted,#9fb0c3)}
+      #exportToastHost{position:fixed;left:18px;bottom:18px;z-index:20000;display:grid;gap:8px;max-width:min(430px,calc(100vw - 36px))}.export-toast{padding:12px 14px;border-radius:15px;background:rgba(15,23,42,.94);color:#fff;box-shadow:0 16px 38px rgba(0,0,0,.25);opacity:0;transform:translateY(16px);transition:.22s ease;font-weight:800}.export-toast.show{opacity:1;transform:translateY(0)}.export-toast.ok{background:rgba(22,101,52,.96)}.export-toast.error{background:rgba(127,29,29,.96)}.export-toast.warning{background:rgba(146,64,14,.96)}.export-toast.info{background:rgba(30,64,175,.96)}
       body.theme-light .official-export-center{background:rgba(255,255,255,.58);border-color:rgba(15,23,42,.10)}body.theme-light .official-export-filters input,body.theme-light .official-export-filters select{background:rgba(255,255,255,.82);border-color:rgba(15,23,42,.12)}body.theme-light .export-card-btn{background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(209,250,229,.48));border-color:rgba(15,23,42,.10)}
       @media(max-width:900px){.official-export-head{flex-direction:column}.official-export-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.official-export-filters .wide{grid-column:1/-1}.official-export-groups{grid-template-columns:1fr}.official-export-group>div{grid-template-columns:1fr}.export-card-btn{min-height:62px}}
     `;
