@@ -1,5 +1,6 @@
 (() => {
-  const VERSION = '20260513-fuel-kpi-override-2';
+  const VERSION = '20260821-fuel-cycle-reset-1';
+  const FUEL_CYCLE_START_DATE = '2026-08-21';
 
   function num(value) {
     if (window.ReportUtils?.number) return window.ReportUtils.number(value);
@@ -22,14 +23,7 @@
   }
 
   function fuelEntryKey(entry) {
-    return [
-      clean(entry.date),
-      clean(entry.time),
-      clean(entry.supplier || entry.donor),
-      fmt(entry.quantityLiters ?? entry.quantity),
-      clean(entry.fillingMethod),
-      clean(entry.deliveredBy)
-    ].join('|');
+    return [clean(entry.date), clean(entry.time), clean(entry.supplier || entry.donor), fmt(entry.quantityLiters ?? entry.quantity), clean(entry.fillingMethod), clean(entry.deliveredBy)].join('|');
   }
 
   function uniqueFuelEntries(entries) {
@@ -46,14 +40,7 @@
 
   function normalizeFuelDoc(doc) {
     const data = doc.data ? doc.data() : doc;
-    return {
-      date: data.date || '',
-      time: data.time || '',
-      supplier: data.supplier || data.donor || '',
-      quantityLiters: data.quantityLiters ?? data.quantity ?? '',
-      fillingMethod: data.fillingMethod || '',
-      deliveredBy: data.deliveredBy || ''
-    };
+    return { date: data.date || '', time: data.time || '', supplier: data.supplier || data.donor || '', quantityLiters: data.quantityLiters ?? data.quantity ?? '', fillingMethod: data.fillingMethod || '', deliveredBy: data.deliveredBy || '' };
   }
 
   function findCard(patterns) {
@@ -72,41 +59,30 @@
     if (small) small.textContent = hint;
   }
 
-  function renderValues({ incoming, used, remaining, startDate }) {
+  function renderValues({ incoming, used, remaining }) {
     document.documentElement.dataset.fuelKpiOverride = VERSION;
-
+    document.documentElement.dataset.fuelCycleStartDate = FUEL_CYCLE_START_DATE;
     const remainingCard = findCard([/السولار في المخزون/, /آخر رصيد/, /وقود متبقي/]);
     const usedCard = findCard([/وقود مستهلك/, /إجمالي السولار المستهلك/, /وقود مستخدم/]);
     const incomingCard = findCard([/إجمالي السولار المستلم/, /سولار مستلم/, /وقود وارد/]);
-    const dateHint = startDate ? `من ${displayDate(startDate)} حتى اليوم` : 'لا يوجد وقود وارد بعد';
-
-    setCard(incomingCard, 'وقود وارد', incoming, 'من زر إضافة وقود وارد', 'fuel-incoming-kpi');
+    const dateHint = `الدورة الحالية من ${displayDate(FUEL_CYCLE_START_DATE)}`;
+    setCard(incomingCard, 'وقود وارد', incoming, dateHint, 'fuel-incoming-kpi');
     setCard(usedCard, 'وقود مستخدم', used, dateHint, 'fuel-used-kpi');
-    setCard(remainingCard, 'وقود متبقي', remaining, 'الوارد - المستخدم لنفس الفترة', 'fuel-remaining-kpi');
+    setCard(remainingCard, 'وقود متبقي', remaining, 'الوارد - المستخدم للدورة الحالية', 'fuel-remaining-kpi');
   }
 
   async function fetchSummary() {
     if (!window.firebase?.firestore) return null;
     const db = firebase.firestore();
-    const [fuelSnap, reportsSnap] = await Promise.all([
-      db.collection('fuelEntries').get(),
-      db.collection('reports').get()
-    ]);
-
-    const incomingEntries = uniqueFuelEntries(fuelSnap.docs.map(normalizeFuelDoc));
+    const [fuelSnap, reportsSnap] = await Promise.all([db.collection('fuelEntries').get(), db.collection('reports').get()]);
+    const incomingEntries = uniqueFuelEntries(fuelSnap.docs.map(normalizeFuelDoc)).filter(entry => entry.date && entry.date >= FUEL_CYCLE_START_DATE);
     const incoming = incomingEntries.reduce((sum, entry) => sum + num(entry.quantityLiters), 0);
-    const dates = incomingEntries.map(entry => entry.date).filter(Boolean).sort();
-    const startDate = dates[0] || '';
-
-    const used = startDate
-      ? reportsSnap.docs.reduce((sum, doc) => {
-          const data = doc.data() || {};
-          if (!data.reportDate || data.reportDate < startDate) return sum;
-          return sum + num(data?.fuel?.consumedDaily);
-        }, 0)
-      : 0;
-
-    return { incoming, used, remaining: incoming - used, startDate };
+    const used = reportsSnap.docs.reduce((sum, doc) => {
+      const data = doc.data() || {};
+      if (!data.reportDate || data.reportDate < FUEL_CYCLE_START_DATE) return sum;
+      return sum + num(data?.fuel?.consumedDaily);
+    }, 0);
+    return { incoming, used, remaining: incoming - used };
   }
 
   async function update() {
@@ -124,15 +100,8 @@
     setTimeout(update, 5000);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
-
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   if (window.firebase?.auth) {
-    try {
-      firebase.auth().onAuthStateChanged(() => setTimeout(update, 700));
-    } catch {}
+    try { firebase.auth().onAuthStateChanged(() => setTimeout(update, 700)); } catch {}
   }
 })();
