@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geosmart}
+      POSTGRES_USER: ${POSTGRES_USER:-geosmart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - geosmart_db:/var/lib/postgresql
+      - ./database/migrations/001_init.sql:/docker-entrypoint-initdb.d/20_schema.sql:ro
+      - ./database/seed/001_seed.sql:/docker-entrypoint-initdb.d/30_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-geosmart} -d ${POSTGRES_DB:-geosmart}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+  api:
+    build:
+      context: ./api
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-geosmart}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-geosmart}
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  geosmart_db:

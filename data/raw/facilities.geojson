@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "F-01",
+      "properties": {
+        "name": "مرفق تدريبي 1",
+        "facility_type": "service"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.208,
+          31.896
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "F-02",
+      "properties": {
+        "name": "مرفق تدريبي 2",
+        "facility_type": "service"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.231,
+          31.903
+        ]
+      }
+    }
+  ]
+}

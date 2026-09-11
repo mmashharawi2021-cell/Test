@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "INVALID-01",
+      "properties": {
+        "reason": "self intersection training sample"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              35.21,
+              31.9
+            ],
+            [
+              35.213,
+              31.903
+            ],
+            [
+              35.21,
+              31.903
+            ],
+            [
+              35.213,
+              31.9
+            ],
+            [
+              35.21,
+              31.9
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
