@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "name": "buildings",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "A-001",
+      "properties": {"external_id": "A-001", "name": "أصل تدريبي 1", "review_status": "pending", "version": 1},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.2055,31.893],[35.2067,31.893],[35.2067,31.8942],[35.2055,31.8942],[35.2055,31.893]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "A-002",
+      "properties": {"external_id": "A-002", "name": "أصل تدريبي 2", "review_status": "approved", "version": 1},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.2090,31.894],[35.2102,31.894],[35.2102,31.8952],[35.2090,31.8952],[35.2090,31.894]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "A-003",
+      "properties": {"external_id": "A-003", "name": "أصل تدريبي 3", "review_status": "rejected", "version": 1},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.2230,31.892],[35.2242,31.892],[35.2242,31.8932],[35.2230,31.8932],[35.2230,31.892]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "A-004",
+      "properties": {"external_id": "A-004", "name": "أصل تدريبي 4", "review_status": "pending", "version": 1},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.2300,31.900],[35.2312,31.900],[35.2312,31.9012],[35.2300,31.9012],[35.2300,31.900]]]}
+    }
+  ]
+}
